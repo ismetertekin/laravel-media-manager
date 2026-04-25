@@ -68,7 +68,7 @@ class MediaManagerServiceProvider extends ServiceProvider
                 __DIR__ . '/../database/migrations' => database_path('migrations'),
             ], 'media-manager-migrations');
 
-            // Publish compiled assets (if using pre-built dist)
+            // Publish all compiled assets
             $this->publishes([
                 __DIR__ . '/../dist' => public_path('vendor/media-manager'),
             ], 'media-manager-assets');
