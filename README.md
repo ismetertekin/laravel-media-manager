@@ -26,16 +26,15 @@ A production-ready, reusable Laravel package with a modern, WordPress-like media
    php artisan vendor:publish --tag=media-manager-assets --force
    ```
 
-3. (Optional) Publish configuration, views, and migrations:
-   ```bash
-   php artisan vendor:publish --tag=media-manager-config
-   php artisan vendor:publish --tag=media-manager-migrations
-   php artisan vendor:publish --tag=media-manager-views
-   ```
-
-4. Run the migrations:
+3. Run the database migrations (creates all necessary tables automatically):
    ```bash
    php artisan migrate
+   ```
+
+4. (Optional) Publish configuration and views if you need to customize them:
+   ```bash
+   php artisan vendor:publish --tag=media-manager-config
+   php artisan vendor:publish --tag=media-manager-views
    ```
 
 ## Usage Methods
