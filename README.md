@@ -1,6 +1,6 @@
 # Laravel Media Manager
 
-![Media Manager Demo](./screen/media.gif)
+![Media Manager Demo](./screen/media-demo.gif)
 
 [📁 View more screens and demos](./screen)
 
