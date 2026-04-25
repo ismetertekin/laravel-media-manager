@@ -1,4 +1,4 @@
-# MediaManager Package for Laravel
+# Laravel Media Manager
 
 A production-ready, reusable Laravel package with a modern, WordPress-like media manager modal. Built with Vue 3 and powered by Spatie Laravel MediaLibrary.
 
@@ -6,6 +6,7 @@ A production-ready, reusable Laravel package with a modern, WordPress-like media
 
 - **Spatie Integration**: Seamless backend file management using Spatie MediaLibrary.
 - **Modern UI**: Clean, responsive Vue 3 components with light and dark mode support.
+- **Standalone Build**: Zero frontend dependencies required. Packaged as a drop-in IIFE script.
 - **Virtual Folders**: Organize files into hierarchical folders (stored in database).
 - **Image Processing**: Automatic conversions (thumb, medium, large) and WebP generation.
 - **Infinite Scroll**: Smoothly browse large media collections.
@@ -15,39 +16,34 @@ A production-ready, reusable Laravel package with a modern, WordPress-like media
 
 ## Installation
 
-1. Add the package to your `composer.json` or require it locally during development:
+1. Add the package to your `composer.json`:
    ```bash
    composer require yazilim360/laravel-media-manager
    ```
 
-2. Publish the configuration and migrations:
+2. Publish the assets (REQUIRED for the frontend to work):
+   ```bash
+   php artisan vendor:publish --tag=media-manager-assets --force
+   ```
+
+3. (Optional) Publish configuration, views, and migrations:
    ```bash
    php artisan vendor:publish --tag=media-manager-config
    php artisan vendor:publish --tag=media-manager-migrations
+   php artisan vendor:publish --tag=media-manager-views
    ```
 
-3. Run the migrations:
+4. Run the migrations:
    ```bash
    php artisan migrate
    ```
 
-4. If you are developing locally, add the package assets to your `vite.config.js`:
-   ```js
-   import vue from '@vitejs/plugin-vue';
-   // ...
-   laravel({
-       input: [
-           'packages/yazilim360/media-manager/resources/js/media-manager.js',
-           'packages/yazilim360/media-manager/resources/css/media-manager.css',
-       ],
-   }),
-   vue(),
-   ```
+## Usage Methods
 
-## Usage
+There are two main ways to use this package, depending on how much control you need over your frontend.
 
-### Blade Component
-The easiest way to use the media manager is via the provided Blade component:
+### Method 1: Using the Blade Component (Easiest)
+If you want a quick plug-and-play button, simply drop the provided Blade component anywhere in your views. It will automatically load the required CSS/JS from the `public/vendor` directory and render a trigger button.
 
 ```blade
 <x-media-picker 
@@ -58,20 +54,68 @@ The easiest way to use the media manager is via the provided Blade component:
 />
 ```
 
-### JavaScript API
-You can also open the media manager programmatically:
-
+Then handle the callback in your JavaScript:
 ```js
-window.MediaManager.open({
-    multiple: true,
-    max: 10,
-    types: ['image', 'video'],
-    onSelect: (files) => {
-        console.log('Selected files:', files);
-        // files is an array of objects: { id, url, name, size, ... }
+function myCallbackFunction(selectedFiles) {
+    console.log('User selected:', selectedFiles);
+}
+```
+
+### Method 2: Manual JavaScript API (Advanced Customization)
+If you have your own custom UI (e.g., an existing image input in your admin theme) and don't want to use the `<x-media-picker>` component, you can trigger the Media Manager entirely via JavaScript.
+
+**Step 1:** Include the CSS, JS, and the mounting `div` somewhere on your page:
+```html
+<!-- Include Assets -->
+<link rel="stylesheet" href="{{ asset('vendor/media-manager/media-manager.css') }}">
+<script src="{{ asset('vendor/media-manager/media-manager.js') }}" defer></script>
+
+<!-- Required Root Div for Vue to mount to -->
+<div 
+    id="media-manager-root" 
+    data-translations='@json(trans("media-manager::media-manager"))'
+    data-config='@json(config("media-manager"))' 
+    style="display:none;"
+></div>
+```
+
+**Step 2:** Bind the API to your custom button:
+```html
+<button type="button" class="my-custom-edit-button">
+    Edit Avatar
+</button>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const editBtn = document.querySelector('.my-custom-edit-button');
+
+    if (editBtn) {
+        editBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+
+            window.MediaManager.open({
+                multiple: false,
+                types: ["image"], // only allow images
+                onSelect: function (selectedFiles) {
+                    console.log('Selected File Details:', selectedFiles);
+                    // Update your custom UI here
+                }
+            });
+        });
     }
 });
+</script>
 ```
+
+## Development & Building
+
+If you are modifying the package's Vue components and need to rebuild the `dist` files, use the dedicated Vite library configuration. 
+
+From the root of your package directory:
+```bash
+npx vite build -c vite.config.js
+```
+This will compile everything (including Vue and Axios) into a standalone drop-in IIFE script inside the `dist` folder.
 
 ## Configuration
 The `config/media-manager.php` file allows you to customize storage:
@@ -81,14 +125,7 @@ return [
     'disk_path' => 'media-manager', // Path on disk
     'sidebar'   => true,             // Sidebar default visibility
     'default_view' => 'grid',        // 'grid' or 'list'
-    'locale'    => 'en',             // en, tr
+    'allowed_locales' => ['en', 'tr'], // Supported languages
     // ...
 ];
 ```
-
-## Features Deep-Dive
-- **View Modes**: Toggle between Grid and List views via the toolbar.
-- **Confirmations**: Powered by SweetAlert2 for a premium feel.
-- **Move/Copy**: Organize your library with virtual move/copy operations.
-- **Dark Mode**: Native support with theme persistence.
-- **Localization**: Change `app()->getLocale()` to switch between EN and TR.
