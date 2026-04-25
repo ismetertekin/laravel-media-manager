@@ -1,5 +1,9 @@
 # Laravel Media Manager
 
+![Media Manager Demo](./screen/media.gif)
+
+[📁 View more screens and demos](./screen)
+
 A production-ready, reusable Laravel package with a modern, WordPress-like media manager modal. Built with Vue 3 and powered by Spatie Laravel MediaLibrary.
 
 ## Features
