@@ -129,7 +129,7 @@ tinymce.init({
             onSelect: function (files) {
                 if (files.length > 0) {
                     // Pass the URL back to TinyMCE
-                    callback(files[0].original_url, { alt: files[0].name });
+                    callback(files[0].url, { alt: files[0].name });
                 }
             }
         });
