@@ -15,12 +15,23 @@
 --}}
 
 @php
-    $mmPickerTranslations = $mmPickerTranslations ?? [];
-    if (! is_array($mmPickerTranslations)) {
-        $mmPickerTranslations = [];
-    }
-    $mmPickerConfig = config('media-manager');
+$mmPickerTranslations = $mmPickerTranslations ?? [];
+if (! is_array($mmPickerTranslations)) {
+    $mmPickerTranslations = [];
+}
+$mmPickerConfig = config('media-manager');
+$distPath = public_path('vendor/media-manager/dist/media-manager.js');
+$useDist = file_exists($distPath);
 @endphp
+
+@if($useDist)
+<link rel="stylesheet" href="{{ asset('vendor/media-manager/dist/media-manager.css') }}">
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+<script src="{{ asset('vendor/media-manager/dist/media-manager.js') }}" defer></script>
+@else
+@vite(['packages/yazilim360/media-manager/resources/js/media-manager.js'])
+@endif
+
 <div
     id="media-manager-root"
     data-translations='@json($mmPickerTranslations)'
