@@ -1,0 +1,30 @@
+{
+    "name": "yazilim360/laravel-media-manager",
+    "type": "library",
+    "description": "Modern Vue 3 media manager for Laravel with Spatie MediaLibrary integration. Features virtual folders, dark mode, drag & drop upload, and infinite scroll.",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Ismet Ertekin",
+            "email": "ismet.ertekin@yazilim360.com.tr"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Yazilim360\\MediaManager\\": "src/"
+        }
+    },
+    "require": {
+        "php": "^8.0",
+        "spatie/laravel-medialibrary": "^11",
+        "illuminate/support": ">=9.0|^10|^11|^12|^13"
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Yazilim360\\MediaManager\\MediaManagerServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "stable"
+}
