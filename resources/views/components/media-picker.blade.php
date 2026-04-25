@@ -46,7 +46,7 @@ $useDist = file_exists($distPath);
     type="button"
     class="{{ $buttonClass }}"
     id="mm-trigger-{{ \Illuminate\Support\Str::random(6) }}"
-    onclick="
+    onclick='
         window.MediaManager.open({
             multiple: {{ $multiple ? 'true' : 'false' }},
             max: {{ $max }},
@@ -56,7 +56,7 @@ $useDist = file_exists($distPath);
             locale: @json($locale),
             theme: @json($theme)
         });
-    "
+    '
 >
     {{ $buttonText }}
 </button>
