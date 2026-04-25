@@ -95,6 +95,9 @@ document.addEventListener('DOMContentLoaded', function () {
             window.MediaManager.open({
                 multiple: false,
                 types: ["image"], // only allow images
+                sidebar: true,    // dynamically show/hide sidebar
+                theme: 'dark',    // dynamically set theme ('light' or 'dark')
+                locale: 'tr',     // dynamically set language ('en' or 'tr')
                 onSelect: function (selectedFiles) {
                     console.log('Selected File Details:', selectedFiles);
                     // Update your custom UI here
@@ -104,6 +107,34 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 });
 </script>
+```
+
+### TinyMCE Integration
+You can easily use the Media Manager as the central file picker for TinyMCE. Just use the `file_picker_callback` option in your TinyMCE initialization:
+
+```js
+tinymce.init({
+    selector: '#my-editor',
+    plugins: 'image media link',
+    toolbar: 'image media link',
+    file_picker_callback: function (callback, value, meta) {
+        // Determine allowed types based on what button was clicked in TinyMCE
+        let allowedTypes = ['image', 'video', 'document'];
+        if (meta.filetype === 'image') allowedTypes = ['image'];
+        if (meta.filetype === 'media') allowedTypes = ['video'];
+
+        window.MediaManager.open({
+            multiple: false,
+            types: allowedTypes,
+            onSelect: function (files) {
+                if (files.length > 0) {
+                    // Pass the URL back to TinyMCE
+                    callback(files[0].original_url, { alt: files[0].name });
+                }
+            }
+        });
+    }
+});
 ```
 
 ## Development & Building
