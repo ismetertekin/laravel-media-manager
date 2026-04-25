@@ -17,7 +17,7 @@ A production-ready, reusable Laravel package with a modern, WordPress-like media
 
 1. Add the package to your `composer.json` or require it locally during development:
    ```bash
-   composer require yazilim360/media-manager
+   composer require yazilim360/laravel-media-manager
    ```
 
 2. Publish the configuration and migrations:
