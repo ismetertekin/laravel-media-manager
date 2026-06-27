@@ -21,6 +21,11 @@ return [
     |--------------------------------------------------------------------------
     | Upload Constraints
     |--------------------------------------------------------------------------
+    |
+    | max_upload is in kilobytes. It drives Laravel request validation and is
+    | automatically synced to Spatie's media-library.max_file_size (bytes).
+    | Also ensure PHP post_max_size and upload_max_filesize exceed this value.
+    |
     */
     'max_upload' => env('MEDIA_MANAGER_MAX_FILE_SIZE', 51200), // KB (50MB)
 

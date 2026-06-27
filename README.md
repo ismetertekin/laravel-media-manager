@@ -46,6 +46,7 @@ A production-ready, reusable Laravel package with a modern, WordPress-like media
 There are two main ways to use this package, depending on how much control you need over your frontend.
 
 ### Method 1: Using the Blade Component (Easiest)
+
 If you want a quick plug-and-play button, simply drop the provided Blade component anywhere in your views. It will automatically load the required CSS/JS from the `public/vendor` directory and render a trigger button.
 
 ```blade
@@ -58,6 +59,7 @@ If you want a quick plug-and-play button, simply drop the provided Blade compone
 ```
 
 Then handle the callback in your JavaScript:
+
 ```js
 function myCallbackFunction(selectedFiles) {
     console.log('User selected:', selectedFiles);
@@ -65,9 +67,11 @@ function myCallbackFunction(selectedFiles) {
 ```
 
 ### Method 2: Manual JavaScript API (Advanced Customization)
+
 If you have your own custom UI (e.g., an existing image input in your admin theme) and don't want to use the `<x-media-picker>` component, you can trigger the Media Manager entirely via JavaScript.
 
 **Step 1:** Include the CSS, JS, and the mounting `div` somewhere on your page:
+
 ```html
 <!-- Include Assets -->
 <link rel="stylesheet" href="{{ asset('vendor/media-manager/media-manager.css') }}">
@@ -83,6 +87,7 @@ If you have your own custom UI (e.g., an existing image input in your admin them
 ```
 
 **Step 2:** Bind the API to your custom button:
+
 ```html
 <button type="button" class="my-custom-edit-button">
     Edit Avatar
@@ -114,6 +119,7 @@ document.addEventListener('DOMContentLoaded', function () {
 ```
 
 ### TinyMCE Integration
+
 You can easily use the Media Manager as the central file picker for TinyMCE. Just use the `file_picker_callback` option in your TinyMCE initialization:
 
 ```js
@@ -143,15 +149,24 @@ tinymce.init({
 
 ## Development & Building
 
-If you are modifying the package's Vue components and need to rebuild the `dist` files, use the dedicated Vite library configuration. 
+If you are modifying the package's Vue components and need to rebuild the `dist` files, use the dedicated Vite library configuration.
 
 From the root of your package directory:
+
 ```bash
 npx vite build -c vite.config.js
 ```
+
 This will compile everything (including Vue and Axios) into a standalone drop-in IIFE script inside the `dist` folder.
 
 ## Configuration
+
+Publish the config when you need to customize storage or upload limits:
+
+```bash
+php artisan vendor:publish --tag=media-manager-config
+```
+
 The `config/media-manager.php` file allows you to customize storage:
 
 ```php
@@ -162,4 +177,21 @@ return [
     'allowed_locales' => ['en', 'tr'], // Supported languages
     // ...
 ];
+```
+
+### Upload file size
+
+Use a single setting for this package:
+
+```env
+MEDIA_MANAGER_MAX_FILE_SIZE=524288
+```
+
+The value is in **kilobytes** (example above ≈ 512MB). The package syncs it to Spatie Media Library's `media-library.max_file_size` automatically, so you do not need to publish or edit Spatie's config separately.
+
+Also make sure your PHP limits are high enough:
+
+```ini
+upload_max_filesize = 512M
+post_max_size = 512M
 ```

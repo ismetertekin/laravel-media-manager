@@ -11,6 +11,8 @@ class MediaManagerServiceProvider extends ServiceProvider
 {
     public function boot(): void
     {
+        $this->syncSpatieMaxFileSize();
+
         // Spatie resolves path generators from config, not the container bind.
         $existing = config('media-library.custom_path_generators');
         $generators = array_merge(
@@ -36,7 +38,7 @@ class MediaManagerServiceProvider extends ServiceProvider
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
 
         // ─── Translations ─────────────────────────────────────────
-        $this->loadTranslationsFrom(__DIR__.'/../resources/lang', 'media-manager');
+        $this->loadTranslationsFrom(__DIR__ . '/../resources/lang', 'media-manager');
 
         // ─── Blade Components ──────────────────────────────────────
         // Register <x-media-picker /> component
@@ -60,7 +62,7 @@ class MediaManagerServiceProvider extends ServiceProvider
 
             // Publish translations
             $this->publishes([
-                __DIR__.'/../resources/lang' => resource_path('lang/vendor/media-manager'),
+                __DIR__ . '/../resources/lang' => resource_path('lang/vendor/media-manager'),
             ], 'media-manager-lang');
 
             // Publish migrations
@@ -82,6 +84,23 @@ class MediaManagerServiceProvider extends ServiceProvider
             __DIR__ . '/../config/media-manager.php',
             'media-manager'
         );
+    }
 
+    /**
+     * Keep Spatie Media Library in sync with media-manager upload limits.
+     *
+     * Spatie defaults to 10MB (`media-library.max_file_size`). This package
+     * validates uploads via `media-manager.max_upload` (KB). Without syncing,
+     * larger files pass request validation but fail inside addMedia().
+     */
+    protected function syncSpatieMaxFileSize(): void
+    {
+        $maxUploadKb = (int) config('media-manager.max_upload', 51200);
+
+        if ($maxUploadKb <= 0) {
+            return;
+        }
+
+        config(['media-library.max_file_size' => $maxUploadKb * 1024]);
     }
 }
