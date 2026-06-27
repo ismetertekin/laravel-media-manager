@@ -11,7 +11,7 @@ class MediaManagerServiceProvider extends ServiceProvider
 {
     public function boot(): void
     {
-        $this->syncSpatieMaxFileSize();
+        $this->syncSpatieMediaLibraryConfig();
 
         // Spatie resolves path generators from config, not the container bind.
         $existing = config('media-library.custom_path_generators');
@@ -87,6 +87,15 @@ class MediaManagerServiceProvider extends ServiceProvider
     }
 
     /**
+     * Keep Spatie Media Library aligned with media-manager package settings.
+     */
+    protected function syncSpatieMediaLibraryConfig(): void
+    {
+        $this->syncSpatieMaxFileSize();
+        $this->syncSpatieFfmpegConfig();
+    }
+
+    /**
      * Keep Spatie Media Library in sync with media-manager upload limits.
      *
      * Spatie defaults to 10MB (`media-library.max_file_size`). This package
@@ -102,5 +111,31 @@ class MediaManagerServiceProvider extends ServiceProvider
         }
 
         config(['media-library.max_file_size' => $maxUploadKb * 1024]);
+    }
+
+    /**
+     * Forward FFmpeg settings to Spatie for video thumbnail generation.
+     */
+    protected function syncSpatieFfmpegConfig(): void
+    {
+        $ffmpegPath = config('media-manager.ffmpeg_path');
+        if (is_string($ffmpegPath) && $ffmpegPath !== '') {
+            config(['media-library.ffmpeg_path' => $ffmpegPath]);
+        }
+
+        $ffprobePath = config('media-manager.ffprobe_path');
+        if (is_string($ffprobePath) && $ffprobePath !== '') {
+            config(['media-library.ffprobe_path' => $ffprobePath]);
+        }
+
+        $ffmpegTimeout = config('media-manager.ffmpeg_timeout');
+        if ($ffmpegTimeout !== null) {
+            config(['media-library.ffmpeg_timeout' => (int) $ffmpegTimeout]);
+        }
+
+        $ffmpegThreads = config('media-manager.ffmpeg_threads');
+        if ($ffmpegThreads !== null) {
+            config(['media-library.ffmpeg_threads' => (int) $ffmpegThreads]);
+        }
     }
 }

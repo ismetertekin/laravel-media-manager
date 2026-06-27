@@ -23,16 +23,14 @@ class MediaManager extends Model implements HasMedia
     protected $fillable = ['name'];
 
     /**
-     * Register image conversions.
-     * These are applied automatically when an image is added to an
-     * image-based collection.
+     * Register image and video conversions.
      */
     public function registerMediaConversions(?Media $media = null): void
     {
         $conversions = config('media-manager.conversions', [
-            'thumb'  => [300, 300],
+            'thumb' => [300, 300],
             'medium' => [600, 600],
-            'large'  => [1200, 1200],
+            'large' => [1200, 1200],
         ]);
 
         foreach ($conversions as $name => [$width, $height]) {
@@ -41,13 +39,24 @@ class MediaManager extends Model implements HasMedia
                 ->height($height)
                 ->sharpen(10)
                 ->optimize()
-                ->nonQueued(); // Use queued() in production
+                ->performOnCollections(['images', 'default'])
+                ->nonQueued();
         }
 
-        // Additionally generate a WebP version of originals
+        [$thumbWidth, $thumbHeight] = $conversions['thumb'] ?? [300, 300];
+        $videoThumbSecond = (float) config('media-manager.video_thumb_second', 1);
+
+        $this->addMediaConversion('thumb')
+            ->width($thumbWidth)
+            ->height($thumbHeight)
+            ->extractVideoFrameAtSecond($videoThumbSecond)
+            ->performOnCollections(['videos'])
+            ->nonQueued();
+
         $this->addMediaConversion('webp')
             ->format('webp')
             ->optimize()
+            ->performOnCollections(['images', 'default'])
             ->nonQueued();
     }
 

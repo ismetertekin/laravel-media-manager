@@ -195,3 +195,19 @@ Also make sure your PHP limits are high enough:
 upload_max_filesize = 512M
 post_max_size = 512M
 ```
+
+### Video thumbnails
+
+Uploaded videos can generate grid thumbnails when FFmpeg is available on the server.
+
+1. Install FFmpeg and set paths in `.env`:
+
+```env
+FFMPEG_PATH=C:\ffmpeg\bin\ffmpeg.exe
+FFPROBE_PATH=C:\ffmpeg\bin\ffprobe.exe
+MEDIA_MANAGER_VIDEO_THUMB_SECOND=1
+```
+
+2. Ensure `php-ffmpeg/php-ffmpeg` is installed (pulled automatically with this package).
+
+If FFmpeg is missing or thumbnail generation fails, the UI falls back to the existing video icon.

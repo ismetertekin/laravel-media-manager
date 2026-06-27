@@ -9,12 +9,12 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * Transforms a Spatie Media model into a consistent JSON structure
  * for the Vue frontend.
  *
- * @property int    $id
+ * @property int $id
  * @property string $name
  * @property string $file_name
  * @property string $mime_type
- * @property int    $size
- * @property array  $custom_properties
+ * @property int $size
+ * @property array $custom_properties
  */
 class MediaResource extends JsonResource
 {
@@ -24,8 +24,8 @@ class MediaResource extends JsonResource
         $type = match (true) {
             str_starts_with($this->mime_type, 'image/') => 'image',
             str_starts_with($this->mime_type, 'video/') => 'video',
-            $this->mime_type === 'application/pdf'      => 'pdf',
-            default                                     => 'file',
+            $this->mime_type === 'application/pdf' => 'pdf',
+            default => 'file',
         };
 
         // Build conversion URLs safely
@@ -40,23 +40,27 @@ class MediaResource extends JsonResource
             }
         }
 
+        $thumbUrl = $conversions['thumb'] ?? ($type === 'image' ? $this->getUrl() : null);
+
         return [
-            'id'                => $this->id,
-            'uuid'              => $this->uuid,
-            'name'              => $this->name,
-            'file_name'         => $this->file_name,
-            'mime_type'         => $this->mime_type,
-            'type'              => $type,
-            'size'              => $this->size,
-            'size_human'        => $this->humanReadableSize,
-            'url'               => $this->getUrl(),
-            'conversions'       => $conversions,
-            'thumb_url'         => $conversions['thumb'] ?? ($type === 'image' ? $this->getUrl() : null),
-            'collection'        => $this->collection_name,
-            'folder_id'         => $this->custom_properties['folder_id'] ?? null,
-            'folder_name'       => $this->custom_properties['folder_name'] ?? null,
+            'id' => $this->id,
+            'uuid' => $this->uuid,
+            'name' => $this->name,
+            'file_name' => $this->file_name,
+            'mime_type' => $this->mime_type,
+            'type' => $type,
+            'size' => $this->size,
+            'size_human' => $this->humanReadableSize,
+            'url' => $this->getUrl(),
+            'conversions' => $conversions,
+            'thumb_url' => $thumbUrl,
+            'thumbnail_url' => $thumbUrl,
+            'preview_url' => $thumbUrl,
+            'collection' => $this->collection_name,
+            'folder_id' => $this->custom_properties['folder_id'] ?? null,
+            'folder_name' => $this->custom_properties['folder_name'] ?? null,
             'custom_properties' => $this->custom_properties,
-            'created_at'        => $this->created_at?->toISOString(),
+            'created_at' => $this->created_at?->toISOString(),
         ];
     }
 }

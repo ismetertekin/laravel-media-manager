@@ -79,8 +79,14 @@ return [
     |--------------------------------------------------------------------------
     | Binaries
     |--------------------------------------------------------------------------
-    | FFmpeg is used to generate video thumbnails.
+    | FFmpeg is used to generate video thumbnails via Spatie Media Library.
+    | Windows example:
+    |   FFMPEG_PATH=C:\ffmpeg\bin\ffmpeg.exe
+    |   FFPROBE_PATH=C:\ffmpeg\bin\ffprobe.exe
     */
+    'video_thumb_second' => env('MEDIA_MANAGER_VIDEO_THUMB_SECOND', 1),
     'ffmpeg_path' => env('FFMPEG_PATH', '/usr/bin/ffmpeg'),
     'ffprobe_path' => env('FFPROBE_PATH', '/usr/bin/ffprobe'),
+    'ffmpeg_timeout' => env('FFMPEG_TIMEOUT', 900),
+    'ffmpeg_threads' => env('FFMPEG_THREADS', 0),
 ];
