@@ -27,11 +27,19 @@ class MediaManager extends Model implements HasMedia
      */
     public function registerMediaConversions(?Media $media = null): void
     {
+        if (filter_var(config('media-manager.skip_conversions', false), FILTER_VALIDATE_BOOLEAN)) {
+            return;
+        }
+
         $conversions = config('media-manager.conversions', [
             'thumb' => [300, 300],
             'medium' => [600, 600],
             'large' => [1200, 1200],
         ]);
+
+        if (!is_array($conversions) || $conversions === []) {
+            return;
+        }
 
         foreach ($conversions as $name => [$width, $height]) {
             $this->addMediaConversion($name)
