@@ -47,7 +47,7 @@ class Folder extends Model
             static::query()
                 ->where('slug', $slug)
                 ->where('parent_id', $parentId)
-                ->when($excludeId, fn($q) => $q->where('id', '!=', $excludeId))
+                ->when($excludeId, fn ($q) => $q->where('id', '!=', $excludeId))
                 ->exists()
         ) {
             $slug = "{$base}-{$counter}";
@@ -64,8 +64,8 @@ class Folder extends Model
     public static function ensurePath(string $path): ?self
     {
         $segments = array_values(array_filter(
-            array_map(static fn(string $segment): string => trim($segment), explode('/', str_replace('\\', '/', $path))),
-            static fn(string $segment): bool => $segment !== '' && $segment !== '.',
+            array_map(static fn (string $segment): string => trim($segment), explode('/', str_replace('\\', '/', $path))),
+            static fn (string $segment): bool => $segment !== '' && $segment !== '.',
         ));
 
         if ($segments === []) {
@@ -100,8 +100,8 @@ class Folder extends Model
     public static function findByPath(string $path): ?self
     {
         $segments = array_values(array_filter(
-            array_map(static fn(string $segment): string => trim($segment), explode('/', str_replace('\\', '/', $path))),
-            static fn(string $segment): bool => $segment !== '' && $segment !== '.',
+            array_map(static fn (string $segment): string => trim($segment), explode('/', str_replace('\\', '/', $path))),
+            static fn (string $segment): bool => $segment !== '' && $segment !== '.',
         ));
 
         if ($segments === []) {
@@ -117,7 +117,7 @@ class Folder extends Model
                 ->where('parent_id', $parentId)
                 ->first();
 
-            if (!$folder instanceof self) {
+            if (! $folder instanceof self) {
                 return null;
             }
 
@@ -139,13 +139,13 @@ class Folder extends Model
             $children = static::query()
                 ->whereIn('parent_id', $frontier)
                 ->pluck('id')
-                ->map(static fn($id): int => (int) $id)
+                ->map(static fn ($id): int => (int) $id)
                 ->all();
 
             $frontier = [];
 
             foreach ($children as $childId) {
-                if (!in_array($childId, $ids, true)) {
+                if (! in_array($childId, $ids, true)) {
                     $ids[] = $childId;
                     $frontier[] = $childId;
                 }
@@ -153,6 +153,14 @@ class Folder extends Model
         }
 
         return $ids;
+    }
+
+    /**
+     * True when $this is $other or lives anywhere below it (used to forbid cycles on move).
+     */
+    public function isSelfOrDescendantOf(self $other): bool
+    {
+        return in_array((int) $this->id, $other->descendantAndSelfIds(), true);
     }
 
     /**

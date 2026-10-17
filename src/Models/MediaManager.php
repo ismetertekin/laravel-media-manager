@@ -37,7 +37,7 @@ class MediaManager extends Model implements HasMedia
             'large' => [1200, 1200],
         ]);
 
-        if (!is_array($conversions) || $conversions === []) {
+        if (! is_array($conversions) || $conversions === []) {
             return;
         }
 
@@ -47,25 +47,32 @@ class MediaManager extends Model implements HasMedia
                 ->height($height)
                 ->sharpen(10)
                 ->optimize()
-                ->performOnCollections(['images', 'default'])
+                ->performOnCollections('images', 'default')
                 ->nonQueued();
         }
 
         [$thumbWidth, $thumbHeight] = $conversions['thumb'] ?? [300, 300];
         $videoThumbSecond = (float) config('media-manager.video_thumb_second', 1);
+        $duration = (float) ($media?->getCustomProperty('duration') ?? 0);
+        if ($duration > 0) {
+            // Never ask for a frame past the end of short clips.
+            $videoThumbSecond = min($videoThumbSecond, round($duration / 2, 2));
+        }
 
         $this->addMediaConversion('thumb')
             ->width($thumbWidth)
             ->height($thumbHeight)
             ->extractVideoFrameAtSecond($videoThumbSecond)
-            ->performOnCollections(['videos'])
+            ->performOnCollections('videos')
             ->nonQueued();
 
-        $this->addMediaConversion('webp')
-            ->format('webp')
-            ->optimize()
-            ->performOnCollections(['images', 'default'])
-            ->nonQueued();
+        if (config('media-manager.webp', true)) {
+            $this->addMediaConversion('webp')
+                ->format('webp')
+                ->optimize()
+                ->performOnCollections('images', 'default')
+                ->nonQueued();
+        }
     }
 
     /**
@@ -78,11 +85,14 @@ class MediaManager extends Model implements HasMedia
 
         $this->addMediaCollection('images')
             ->useDisk(config('media-manager.disk', 'public'))
-            ->acceptsMimeTypes(['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml']);
+            ->acceptsMimeTypes(array_filter([
+                'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+                config('media-manager.allow_svg') ? 'image/svg+xml' : null,
+            ]));
 
         $this->addMediaCollection('videos')
             ->useDisk(config('media-manager.disk', 'public'))
-            ->acceptsMimeTypes(['video/mp4', 'video/quicktime', 'video/avi', 'video/webm']);
+            ->acceptsMimeTypes(['video/mp4', 'video/quicktime', 'video/avi', 'video/webm', 'video/x-msvideo']);
 
         $this->addMediaCollection('documents')
             ->useDisk(config('media-manager.disk', 'public'))

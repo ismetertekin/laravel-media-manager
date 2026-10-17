@@ -2,212 +2,321 @@
 
 ![Media Manager Demo](./screen/media-demo.gif)
 
-[📁 View more screens and demos](./screen)
+A reusable media library for Laravel: a Vue 3 modal (or embedded screen) on top of
+[Spatie Laravel MediaLibrary](https://spatie.be/docs/laravel-medialibrary). It is mounted with plain
+JavaScript, so it works in any admin theme — and it follows the theme's **light/dark mode and primary
+colour** automatically (built and tuned for Metronic, works with shadcn-style variables out of the box).
 
-A production-ready, reusable Laravel package with a modern, WordPress-like media manager modal. Built with Vue 3 and powered by Spatie Laravel MediaLibrary.
+- **Library** – grid & list, drag & drop and multi-file upload with progress / cancel / retry, search, type filter,
+  sorting, infinite scroll, multi-select (Shift-range, Ctrl+A), bulk move / copy / delete
+- **Folders** – nested virtual folders mirrored on disk, rename, move (drag & drop), safe delete
+- **Theme variants + crop** – the host passes the image sizes its theme needs; every upload produces them
+  (`photo-128x128.jpg`, `photo-256x256.jpg`, …) from the untouched original, with a crop / rotate / flip editor
+- **Viewer** – full-screen lightbox with previous/next, zoom & pan, keyboard shortcuts, **video playback**, PDF preview, download fallback
+- **Picker** – single / multiple, max limit, reorderable selection, preselected media, modal or embedded (`container`)
+- **Details** – name, alt text, title, description, dimensions, duration, variants, copy URL
+- **Safety** – authenticated routes, optional Gate, SVG rejected by default, duplicate detection, "in use" check before delete
+- **i18n** – English and Turkish included, extend by publishing the lang files
 
-## Features
+## Requirements
 
-- **Spatie Integration**: Seamless backend file management using Spatie MediaLibrary.
-- **Modern UI**: Clean, responsive Vue 3 components with light and dark mode support.
-- **Standalone Build**: Zero frontend dependencies required. Packaged as a drop-in IIFE script.
-- **Virtual Folders**: Organize files into hierarchical folders (stored in database).
-- **Image Processing**: Automatic conversions (thumb, medium, large) and WebP generation.
-- **Infinite Scroll**: Smoothly browse large media collections.
-- **Multi-select**: Support for single or multiple file selection with configurable limits.
-- **Drag & Drop**: Effortless file uploads via drag-and-drop.
-- **Theme-agnostic**: Self-contained CSS with custom properties that adapt to any admin theme.
+PHP 8.1+, Laravel 10–13, `spatie/laravel-medialibrary` ^11, the **GD** extension (image processing; `exif` is
+recommended for phone photos). FFmpeg + ffprobe are optional (video posters, duration, resolution).
 
 ## Installation
 
-1. Add the package to your `composer.json`:
-   ```bash
-   composer require yazilim360/laravel-media-manager
-   ```
-
-2. Publish the assets (REQUIRED for the frontend to work):
-   ```bash
-   php artisan vendor:publish --tag=media-manager-assets --force
-   ```
-
-3. Run the database migrations (creates all necessary tables automatically):
-   ```bash
-   php artisan migrate
-   ```
-
-4. (Optional) Publish configuration and views if you need to customize them:
-   ```bash
-   php artisan vendor:publish --tag=media-manager-config
-   php artisan vendor:publish --tag=media-manager-views
-   ```
-
-## Usage Methods
-
-There are two main ways to use this package, depending on how much control you need over your frontend.
-
-### Method 1: Using the Blade Component (Easiest)
-
-If you want a quick plug-and-play button, simply drop the provided Blade component anywhere in your views. It will automatically load the required CSS/JS from the `public/vendor` directory and render a trigger button.
-
-```blade
-<x-media-picker 
-    :multiple="true" 
-    :max="5" 
-    button-text="Select Images" 
-    on-select="myCallbackFunction" 
-/>
+```bash
+composer require yazilim360/laravel-media-manager
+php artisan vendor:publish --tag=media-manager-assets --force   # public/vendor/media-manager/*
+php artisan migrate
+php artisan storage:link                                         # when using the public disk
 ```
 
-Then handle the callback in your JavaScript:
+Optional publishes: `--tag=media-manager-config`, `media-manager-views`, `media-manager-lang`, `media-manager-migrations`.
 
-```js
-function myCallbackFunction(selectedFiles) {
-    console.log('User selected:', selectedFiles);
-}
+> **Upgrading from 1.x** – read [Upgrade notes](#upgrade-notes). Re-publish the assets after every update.
+
+### Authentication (important)
+
+All routes (page and JSON API) sit behind `config('media-manager.route_middleware')`, which defaults to
+`web,auth`. With several guards use the guard-specific middleware, either in `.env`
+
+```env
+MEDIA_MANAGER_MIDDLEWARE="web,auth:admin"
+MEDIA_MANAGER_GATE=manage-media        # optional: also require Gate::allows('manage-media')
 ```
 
-### Method 2: Manual JavaScript API (Advanced Customization)
+or in the published config (`'route_middleware' => ['web', 'auth:admin']`).
 
-If you have your own custom UI (e.g., an existing image input in your admin theme) and don't want to use the `<x-media-picker>` component, you can trigger the Media Manager entirely via JavaScript.
+## Usage
 
-**Step 1:** Include the CSS, JS, and the mounting `div` somewhere on your page:
+### Mount point
+
+Render one element anywhere in your layout. The Blade component below does it for you; with plain JS:
 
 ```html
-<!-- Include Assets -->
 <link rel="stylesheet" href="{{ asset('vendor/media-manager/media-manager.css') }}">
 <script src="{{ asset('vendor/media-manager/media-manager.js') }}" defer></script>
 
-<!-- Required Root Div for Vue to mount to -->
-<div 
-    id="media-manager-root" 
-    data-translations='@json(trans("media-manager::media-manager"))'
-    data-config='@json(config("media-manager"))' 
-    style="display:none;"
-></div>
+<div id="media-manager-root"
+     data-translations="{{ json_encode(trans('media-manager::media-manager')) }}"
+     data-config="{{ json_encode(\Yazilim360\MediaManager\Support\ClientConfig::toArray()) }}"></div>
 ```
 
-**Step 2:** Bind the API to your custom button:
+`ClientConfig::toArray()` exposes only the settings the browser needs (never the whole config file). The
+manager mounts itself; `window.MediaManager` is available when the script has run (and a
+`media-manager:ready` event is dispatched on `document`).
 
-```html
-<button type="button" class="my-custom-edit-button">
-    Edit Avatar
-</button>
-
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    const editBtn = document.querySelector('.my-custom-edit-button');
-
-    if (editBtn) {
-        editBtn.addEventListener('click', function (e) {
-            e.preventDefault();
-
-            window.MediaManager.open({
-                multiple: false,
-                types: ["image"], // only allow images
-                sidebar: true,    // dynamically show/hide sidebar
-                theme: 'dark',    // dynamically set theme ('light' or 'dark')
-                locale: 'tr',     // dynamically set language ('en' or 'tr')
-                onSelect: function (selectedFiles) {
-                    console.log('Selected File Details:', selectedFiles);
-                    // Update your custom UI here
-                }
-            });
-        });
-    }
-});
-</script>
-```
-
-### TinyMCE Integration
-
-You can easily use the Media Manager as the central file picker for TinyMCE. Just use the `file_picker_callback` option in your TinyMCE initialization:
+### `MediaManager.open(options)`
 
 ```js
-tinymce.init({
-    selector: '#my-editor',
-    plugins: 'image media link',
-    toolbar: 'image media link',
-    file_picker_callback: function (callback, value, meta) {
-        // Determine allowed types based on what button was clicked in TinyMCE
-        let allowedTypes = ['image', 'video', 'document'];
-        if (meta.filetype === 'image') allowedTypes = ['image'];
-        if (meta.filetype === 'media') allowedTypes = ['video'];
+MediaManager.open({
+    multiple: true,          // default false
+    max: 5,                  // max selectable files when multiple
+    types: ['image'],        // 'image' | 'video' | 'document' – restricts listing AND upload
+    sidebar: true,           // folder tree visible
+    folder: 'themes/default/products', // open (and create) this folder path
+    selected: [12, 15],      // preselect media ids (keeps their order)
+    select: true,            // false = library only, no "Select" button
+    container: '#host',      // embed in an element instead of a modal
+    locale: 'tr',            // 'en' | 'tr' (or any locale you added)
+    theme: 'auto',           // 'auto' (follow the host) | 'light' | 'dark'
 
-        window.MediaManager.open({
-            multiple: false,
-            types: allowedTypes,
-            onSelect: function (files) {
-                if (files.length > 0) {
-                    // Pass the URL back to TinyMCE
-                    callback(files[0].url, { alt: files[0].name });
-                }
-            }
-        });
-    }
-});
+    variants: [...],         // see below
+    crop: true,              // show the crop editor after upload (default true when variants have a ratio)
+
+    onSelect(files) {},      // files = array of media objects (below), in the user's order
+    onClose() {},
+})
 ```
 
-## Development & Building
+`MediaManager.close()` closes it. Escape closes the top-most layer first (dialog → editor → viewer → manager).
 
-If you are modifying the package's Vue components and need to rebuild the `dist` files, use the dedicated Vite library configuration.
+### Theme variants & crop
 
-From the root of your package directory:
+Different themes need different image sizes and aspect ratios. The host (e.g. your theme layer) passes them on every
+`open()`:
+
+```js
+MediaManager.open({
+    types: ['image'],
+    variants: [
+        { name: 'thumb',   width: 128, height: 128 },      // exact size
+        { name: 'card',    width: 256, height: 256 },
+        { name: 'product', ratio: '3:4' },                 // largest 3:4 crop, full resolution
+        { name: 'banner',  ratio: '16:9', width: 1280 },   // height derived from the ratio
+    ],
+    onSelect(files) {
+        files[0].variants.thumb.url      // → /storage/media-manager/12/variants/photo-128x128.jpg
+        files[0].variants.product.width  // → actual pixel size, e.g. 750
+        files[0].url                     // → the untouched original
+    },
+})
+```
+
+- Every upload creates all variants from the **original**, which is never modified. File names carry the
+  size: `{original}-{WIDTH}x{HEIGHT}.{ext}`.
+- Variants with the same aspect ratio share one crop. The editor shows **one step per distinct ratio** (1:1, 3:4, …);
+  the user can drag the crop box, resize it from the corners, zoom (wheel / slider), rotate in 90° steps and flip. Skipping a
+  step keeps the automatic centred crop.
+- Rotate/flip/crop are applied server-side to the original (flip → rotate → crop → resize), so there is no quality loss and
+  the result is identical to what the editor shows. EXIF orientation is honoured, PNG/WebP transparency is kept
+  (JPEG is flattened on white).
+- The specs and the user's crops are stored with the media, so **Crop & rotate** in the details panel re-opens the editor
+  where the user left it. Opening it with different `variants` (a theme switch) regenerates the sizes for the new theme.
+- `default_variants` in the config is used by `php artisan media-manager:regenerate-variants` and the
+  `POST /files/{id}/variants` endpoint when no specs are sent.
+- SVG and animated GIF sources are not processed (only the first GIF frame is). Sources larger than `max_dimension`
+  (default 8000 px on a side) are stored but not processed (`variants_status: failed`) to protect PHP's memory.
+- `queue => true` (`MEDIA_MANAGER_QUEUE=true`) renders variants in a queued job (`variants_status: pending → ready`).
+
+Regenerate variants for existing images, for example after switching theme:
 
 ```bash
-npx vite build -c vite.config.js
+php artisan media-manager:regenerate-variants --specs='[{"name":"card","width":256,"height":256}]'
+php artisan media-manager:regenerate-variants --folder=themes/default --stored   # use each media's own stored specs
 ```
 
-This will compile everything (including Vue and Axios) into a standalone drop-in IIFE script inside the `dist` folder.
+### The media object
+
+Everything the 1.x contract returned is still there (`id`, `uuid`, `name`, `file_name`, `mime_type`, `type`, `size`,
+`size_human`, `url`, `conversions`, `thumb_url`, `collection`, `folder_id`, `folder_name`, `custom_properties`,
+`created_at`). New in 2.0:
+
+```json
+{
+  "width": 1600, "height": 1000, "duration": null,
+  "alt": "Red sneakers", "title": null, "description": null,
+  "variants": { "thumb": { "url": "…/photo-128x128.jpg", "width": 128, "height": 128, "ratio": "1:1", "file": "photo-128x128.jpg" } },
+  "variants_status": "ready", "crops": { "1:1": { "x": 0, "y": 50, "width": 300, "height": 300, "rotate": 90, "flipX": false, "flipY": false } },
+  "editable": true
+}
+```
+
+### Blade component
+
+```blade
+<x-media-picker
+    button-text="Choose image"
+    :multiple="true" :max="5"
+    :variants='[["name"=>"card","width"=>256,"height"=>256],["name"=>"product","ratio"=>"3:4"]]'
+    folder="themes/default/products"
+    on-select="onPicked" />
+
+<script>function onPicked(files) { /* … */ }</script>
+```
+
+### Integration recipes
+
+```js
+// Product gallery: preselect, keep order, replace the field value
+MediaManager.open({
+    multiple: true, max: 8, types: ['image'],
+    selected: currentIds,
+    variants: themeVariants,
+    onSelect: (files) => setGallery(files.map(f => ({ id: f.id, thumb: f.variants.thumb.url }))),
+})
+
+// Remove / replace a single image: call open() again with `selected: [id]`; an empty `onSelect` result never fires,
+// so clear the field in your own "remove" button.
+
+// Embedded library screen
+MediaManager.open({ container: '#media-page', select: false, sidebar: true })
+
+// TinyMCE
+tinymce.init({
+    file_picker_callback(callback, value, meta) {
+        MediaManager.open({
+            types: meta.filetype === 'image' ? ['image'] : meta.filetype === 'media' ? ['video'] : [],
+            onSelect: (files) => files[0] && callback(files[0].url, { alt: files[0].alt || files[0].name }),
+        })
+    },
+})
+```
+
+## Theming
+
+The stylesheet is namespaced (`.mm-*`) and driven by `--mm-*` tokens. Each token resolves **host variable → built-in
+palette**, e.g. `--mm-primary: var(--color-primary, var(--primary, #7239ea))`, so inside Metronic (or any
+shadcn-style theme exposing `--background`, `--foreground`, `--card`, `--muted`, `--muted-foreground`, `--border`,
+`--input`, `--primary`, `--primary-foreground`, `--destructive`, `--radius`) it picks up your colours and your dark mode
+without configuration. The dark mode is read from `html.dark`, `[data-bs-theme]`, `[data-theme]`, `[data-kt-theme-mode]`
+(or the OS preference) and is followed live while the manager is open.
+
+Override anything for another theme:
+
+```css
+.mm-backdrop {
+    --mm-primary: #0ea5e9;
+    --mm-radius: 0.375rem;
+    --mm-control-h: 2.5rem;
+}
+```
+
+`theme: 'dark'` / `'light'` forces a mode; if it differs from the host the built-in palette is used.
 
 ## Configuration
 
-Publish the config when you need to customize storage or upload limits:
+`config/media-manager.php` (publish with `--tag=media-manager-config`):
 
-```bash
-php artisan vendor:publish --tag=media-manager-config
-```
+| Key | Default | Purpose |
+|---|---|---|
+| `route_prefix` | `media-manager` | URL prefix of page + API |
+| `route_middleware` | `web,auth` | Middleware for every route (`MEDIA_MANAGER_MIDDLEWARE`, comma separated) |
+| `authorize` | `null` | Optional Gate ability required on every request (`MEDIA_MANAGER_GATE`) |
+| `disk`, `disk_path` | `public`, `media-manager` | Any Laravel filesystem disk (S3 works) |
+| `max_upload` | `51200` (KB) | Upload limit; synced to Spatie's `max_file_size` |
+| `allowed_types` | images, mp4/webm/mov, pdf, zip, txt | MIME whitelist |
+| `allow_svg` | `false` | SVG can carry scripts; if enabled only "clean" SVGs are accepted |
+| `duplicates` | `warn` | `warn` (upload + notify) / `reuse` (return the existing media) / `allow` |
+| `conversions`, `webp` | thumb/medium/large, `true` | Spatie conversions (grid thumbnails use `thumb`) |
+| `default_variants` | `[]` | Fallback variant specs |
+| `max_variants`, `max_dimension`, `image_quality` | `12`, `8000`, `85` | Limits for the variant pipeline |
+| `queue`, `queue_connection` | `false`, `null` | Render variants on the queue |
+| `usage_resolver` | `null` | Class that reports where a media item is used (below) |
+| `video_thumb_second`, `ffmpeg_path`, `ffprobe_path` | `1`, `/usr/bin/…` | Video poster / metadata |
+| `default_theme`, `default_view`, `sidebar`, `per_page`, `allowed_locales` | `auto`, `grid`, `false`, `30`, `en,tr` | UI defaults |
 
-The `config/media-manager.php` file allows you to customize storage:
+PHP limits must exceed `max_upload`: `upload_max_filesize` and `post_max_size`.
+
+### Refuse to delete media that is in use
+
+The package knows nothing about your tables. Tell it where media is used:
 
 ```php
-return [
-    'disk_path' => 'media-manager', // Path on disk
-    'sidebar'   => true,             // Sidebar default visibility
-    'default_view' => 'grid',        // 'grid' or 'list'
-    'allowed_locales' => ['en', 'tr'], // Supported languages
-    // ...
-];
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
+use Yazilim360\MediaManager\Contracts\MediaUsageResolver;
+
+class ProductMediaUsage implements MediaUsageResolver
+{
+    public function usages(Media $media): array
+    {
+        return Product::where('image_id', $media->id)
+            ->orWhereJsonContains('gallery_ids', $media->id)
+            ->pluck('name')->map(fn ($n) => "Product: {$n}")->all();
+    }
+}
+
+// config/media-manager.php
+'usage_resolver' => App\Media\ProductMediaUsage::class,
 ```
 
-### Upload file size
+Deleting an item (or a folder with its files, or a bulk delete) that reports usages answers **409** with the list; the UI
+shows it and offers "Delete anyway" (`force=1`).
 
-Use a single setting for this package:
+## REST API
 
-```env
-MEDIA_MANAGER_MAX_FILE_SIZE=524288
+All under `/{route_prefix}/api` (JSON, same middleware as the page):
+
+| Method & path | Purpose |
+|---|---|
+| `GET /files` | `folder_id`, `recursive=1`, `search`, `type=image,video`, `sort=created_at\|name\|size`, `dir`, `page`, `ids[]` |
+| `GET /files/{id}` · `PATCH /files/{id}` | Read · update `name`, `alt`, `title`, `description` |
+| `POST /upload` | `files[]`, `folder_id`, `variants` (JSON), `crops` (JSON) → `{data, duplicates}` |
+| `POST /files/{id}/variants` | `variants?`, `crops?` – (re)generate variants |
+| `DELETE /files/{id}` · `POST /files/delete` | Delete one · `ids[]` (`force=1` overrides the usage check) |
+| `POST /files/move` · `POST /files/copy` | `ids[]`, `folder_id` (null = root) |
+| `GET /folders` · `POST /folders` | Tree · `name`, `parent_id` |
+| `POST /folders/rename` · `/folders/move` · `/folders/ensure` | `id,name` · `id,parent_id` · `path` ("a/b/c") |
+| `DELETE /folders/{id}` | `keep_media=1` moves the files to the root, otherwise they are deleted |
+| `GET /translations` | `locale` |
+
+Only media owned by the manager is ever listed or modified, so the package can share the `media` table with your own models.
+
+## Artisan commands
+
+```bash
+php artisan media-manager:regenerate-variants [--specs=JSON] [--stored] [--folder=path] [--ids=1 --ids=2]
+php artisan media-manager:sync-storage-paths [--dry-run]   # repair disk paths that no longer match the folders
+php artisan media-library:regenerate                         # Spatie: rebuild thumb/medium/large conversions
 ```
 
-The value is in **kilobytes** (example above ≈ 512MB). The package syncs it to Spatie Media Library's `media-library.max_file_size` automatically, so you do not need to publish or edit Spatie's config separately.
+## Upgrade notes
 
-Also make sure your PHP limits are high enough:
+**To 2.0** (the visible changes first):
 
-```ini
-upload_max_filesize = 512M
-post_max_size = 512M
+1. **Routes now require authentication by default** (`web,auth`). Set `MEDIA_MANAGER_MIDDLEWARE` / `route_middleware`
+   to your guard (e.g. `web,auth:admin`). Previously the API was open to anyone.
+2. **Re-publish the assets**: `php artisan vendor:publish --tag=media-manager-assets --force`. The Blade views now load
+   `vendor/media-manager/media-manager.{js,css}` (no more CDN axios, SweetAlert2 was removed).
+3. **Grid thumbnails now actually exist.** In 1.x the conversions were registered with an array argument that Spatie
+   ignores, so no `thumb`/`medium`/`large`/`webp` file was ever generated and the grid loaded the originals. Existing
+   images get them with `php artisan media-library:regenerate`.
+4. Files moved between folders are now moved on disk too (1.x only worked for root ⇄ folder), including their variants.
+5. SVG uploads are rejected unless `allow_svg` is true; deleting is limited to media owned by the manager.
+6. The `data-config` attribute carries a whitelist (`ClientConfig::toArray()`), not the whole config. Published copies of
+   the Blade views from 1.x should be removed (`resources/views/vendor/media-manager`).
+
+The JSON shape of media objects is a superset of 1.x. `open()` options from 1.x keep working (`theme` now also accepts `'auto'`).
+
+## Frontend assets
+
+This repository publishes the compiled frontend (`dist/media-manager.js` and `dist/media-manager.css`) together with the Laravel code. Vue and CSS sources are not included. After every update, republish the assets:
+
+```bash
+php artisan vendor:publish --tag=media-manager-assets --force
 ```
 
-### Video thumbnails
+## License
 
-Uploaded videos can generate grid thumbnails when FFmpeg is available on the server.
-
-1. Install FFmpeg and set paths in `.env`:
-
-```env
-FFMPEG_PATH=C:\ffmpeg\bin\ffmpeg.exe
-FFPROBE_PATH=C:\ffmpeg\bin\ffprobe.exe
-MEDIA_MANAGER_VIDEO_THUMB_SECOND=1
-```
-
-2. Ensure `php-ffmpeg/php-ffmpeg` is installed (pulled automatically with this package).
-
-If FFmpeg is missing or thumbnail generation fails, the UI falls back to the existing video icon.
+MIT

@@ -4,6 +4,7 @@ namespace Yazilim360\MediaManager\Support;
 
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
 use Spatie\MediaLibrary\Support\PathGenerator\PathGenerator as BasePathGenerator;
+use Yazilim360\MediaManager\Models\Folder;
 
 class PathGenerator implements BasePathGenerator
 {
@@ -18,11 +19,11 @@ class PathGenerator implements BasePathGenerator
         $folderId = $media->getCustomProperty('folder_id');
 
         $folderSegment = '';
-        if ($folderId && ($folder = \Yazilim360\MediaManager\Models\Folder::find($folderId))) {
-            $folderSegment = $folder->nestedSlugPath() . '/';
+        if ($folderId && ($folder = Folder::find($folderId))) {
+            $folderSegment = $folder->nestedSlugPath().'/';
         }
 
-        return $base . '/' . $folderSegment . $media->id . '/';
+        return $base.'/'.$folderSegment.$media->id.'/';
     }
 
     /**
@@ -30,7 +31,7 @@ class PathGenerator implements BasePathGenerator
      */
     public function getPathForConversions(Media $media): string
     {
-        return $this->getPath($media) . 'conversions/';
+        return $this->getPath($media).'conversions/';
     }
 
     /**
@@ -38,6 +39,6 @@ class PathGenerator implements BasePathGenerator
      */
     public function getPathForResponsiveImages(Media $media): string
     {
-        return $this->getPath($media) . 'responsive-images/';
+        return $this->getPath($media).'responsive-images/';
     }
 }

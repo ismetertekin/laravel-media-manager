@@ -1,7 +1,14 @@
 node_modules/
+vendor/
 .vendor/
 .DS_Store
 .idea/
 *.log
+
+# Vue/CSS sources stay in the private app repo. This package publishes dist/ only.
 resources/js/
 resources/css/
+package.json
+package-lock.json
+vitest.config.js
+tests/

@@ -4,6 +4,8 @@ namespace Yazilim360\MediaManager\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Yazilim360\MediaManager\Support\ImageEditor;
+use Yazilim360\MediaManager\Support\VariantGenerator;
 
 /**
  * Transforms a Spatie Media model into a consistent JSON structure
@@ -20,11 +22,13 @@ class MediaResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $mime = (string) $this->mime_type;
+
         // Determine the media type category for the frontend
         $type = match (true) {
-            str_starts_with($this->mime_type, 'image/') => 'image',
-            str_starts_with($this->mime_type, 'video/') => 'video',
-            $this->mime_type === 'application/pdf' => 'pdf',
+            str_starts_with($mime, 'image/') => 'image',
+            str_starts_with($mime, 'video/') => 'video',
+            $mime === 'application/pdf' => 'pdf',
             default => 'file',
         };
 
@@ -41,13 +45,14 @@ class MediaResource extends JsonResource
         }
 
         $thumbUrl = $conversions['thumb'] ?? ($type === 'image' ? $this->getUrl() : null);
+        $props = (array) $this->custom_properties;
 
         return [
             'id' => $this->id,
             'uuid' => $this->uuid,
             'name' => $this->name,
             'file_name' => $this->file_name,
-            'mime_type' => $this->mime_type,
+            'mime_type' => $mime,
             'type' => $type,
             'size' => $this->size,
             'size_human' => $this->humanReadableSize,
@@ -57,10 +62,48 @@ class MediaResource extends JsonResource
             'thumbnail_url' => $thumbUrl,
             'preview_url' => $thumbUrl,
             'collection' => $this->collection_name,
-            'folder_id' => $this->custom_properties['folder_id'] ?? null,
-            'folder_name' => $this->custom_properties['folder_name'] ?? null,
-            'custom_properties' => $this->custom_properties,
+            'folder_id' => $props['folder_id'] ?? null,
+            'folder_name' => $props['folder_name'] ?? null,
+            'custom_properties' => $props,
             'created_at' => $this->created_at?->toISOString(),
+
+            // Added in 2.0 (additive, existing keys above are unchanged)
+            'width' => $props['width'] ?? null,
+            'height' => $props['height'] ?? null,
+            'duration' => $props['duration'] ?? null,
+            'alt' => $props['alt'] ?? null,
+            'title' => $props['title'] ?? null,
+            'description' => $props['description'] ?? null,
+            'variants' => $this->variants($props),
+            'variants_status' => $props['variants_status'] ?? null,
+            'crops' => $props['crops'] ?? (object) [],
+            'variant_specs' => $props['variant_specs'] ?? [],
+            'editable' => in_array($mime, ImageEditor::MIMES, true),
         ];
+    }
+
+    /**
+     * name → {url, width, height, ratio}
+     */
+    protected function variants(array $props): array|object
+    {
+        $out = [];
+        $generator = app(VariantGenerator::class);
+
+        foreach ((array) ($props['variants'] ?? []) as $name => $variant) {
+            if (empty($variant['file'])) {
+                continue;
+            }
+
+            $out[$name] = [
+                'url' => $generator->url($this->resource, $variant['file']),
+                'width' => $variant['width'] ?? null,
+                'height' => $variant['height'] ?? null,
+                'ratio' => $variant['ratio'] ?? null,
+                'file' => $variant['file'],
+            ];
+        }
+
+        return $out === [] ? (object) [] : $out;
     }
 }

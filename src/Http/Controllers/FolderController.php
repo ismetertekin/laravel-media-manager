@@ -2,47 +2,41 @@
 
 namespace Yazilim360\MediaManager\Http\Controllers;
 
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
 use Yazilim360\MediaManager\Http\Requests\CreateFolderRequest;
 use Yazilim360\MediaManager\Http\Requests\RenameFolderRequest;
 use Yazilim360\MediaManager\Models\Folder;
 use Yazilim360\MediaManager\Models\MediaManager;
 use Yazilim360\MediaManager\Support\MediaStoragePathSynchronizer;
+use Yazilim360\MediaManager\Support\MediaUsage;
 
 class FolderController extends Controller
 {
     /**
-     * List all folders as a nested tree (roots), or direct children of parent_id.
+     * Folder tree. With parent_id only that folder's subtree is returned.
      *
      * GET /media-manager/api/folders?parent_id=
      */
     public function index(Request $request): JsonResponse
     {
-        if ($request->filled('parent_id')) {
-            $parentId = (int) $request->integer('parent_id');
-            $folders = Folder::query()
-                ->with('children')
-                ->where('parent_id', $parentId)
-                ->orderBy('name')
-                ->get();
+        $all = Folder::query()->orderBy('name')->get();
+        $byParent = $all->groupBy(fn (Folder $f) => $f->parent_id ?? 0);
 
-            return response()->json(['data' => $this->buildTree($folders)]);
-        }
+        $rootId = $request->filled('parent_id') ? (int) $request->integer('parent_id') : 0;
 
-        $folders = Folder::with('children')->whereNull('parent_id')->orderBy('name')->get();
-
-        return response()->json(['data' => $this->buildTree($folders)]);
+        return response()->json(['data' => $this->buildTree($byParent, $rootId)]);
     }
 
     /**
-     * Create a new virtual folder.
-     *
-     * POST /media-manager/api/folders
-     * Body: name, parent_id (optional)
+     * POST /media-manager/api/folders  { name, parent_id? }
      */
     public function store(CreateFolderRequest $request): JsonResponse
     {
@@ -51,10 +45,7 @@ class FolderController extends Controller
             'parent_id' => $request->parent_id,
         ]);
 
-        $disk = config('media-manager.disk', 'public');
-        $base = trim(config('media-manager.disk_path', 'media-manager'), '/');
-        $relative = $base.'/'.$folder->nestedSlugPath();
-        Storage::disk($disk)->makeDirectory($relative);
+        Storage::disk($this->disk())->makeDirectory($this->relative($folder));
 
         return response()->json([
             'message' => 'Folder created.',
@@ -63,37 +54,39 @@ class FolderController extends Controller
     }
 
     /**
-     * Rename an existing folder.
+     * Resolve (and create when missing) a nested folder path such as "themes/default/products".
      *
-     * POST /media-manager/api/folders/rename
-     * Body: id, name
+     * POST /media-manager/api/folders/ensure  { path }
+     */
+    public function ensure(Request $request): JsonResponse
+    {
+        $request->validate(['path' => ['required', 'string', 'max:500', 'regex:/^[^:*?"<>|]+$/u']]);
+
+        $folder = Folder::ensurePath((string) $request->path);
+
+        return response()->json(['data' => $folder ? $this->folderData($folder) : null]);
+    }
+
+    /**
+     * POST /media-manager/api/folders/rename  { id, name }
      */
     public function rename(RenameFolderRequest $request, MediaStoragePathSynchronizer $pathSync): JsonResponse
     {
         $folder = Folder::findOrFail($request->id);
-        $disk = config('media-manager.disk', 'public');
-        $base = trim(config('media-manager.disk_path', 'media-manager'), '/');
-        $oldRelative = $base.'/'.$folder->nestedSlugPath();
+        $oldRelative = $this->relative($folder);
 
-        $folder->update(['name' => $request->name]);
+        DB::transaction(function () use ($folder, $request) {
+            $folder->update(['name' => $request->name]);
+        });
         $folder->refresh();
 
-        $newRelative = $base.'/'.$folder->nestedSlugPath();
+        $this->relocateTree($folder, $oldRelative, $pathSync);
 
-        if ($oldRelative !== $newRelative) {
-            if (Storage::disk($disk)->exists($oldRelative)) {
-                Storage::disk($disk)->makeDirectory(dirname($newRelative));
-                Storage::disk($disk)->move($oldRelative, $newRelative);
-            }
-
-            $folderIds = $folder->descendantAndSelfIds();
-
-            Media::query()
-                ->where('model_type', MediaManager::class)
-                ->whereIn('custom_properties->folder_id', $folderIds)
-                ->get()
-                ->each(fn(Media $item) => $pathSync->syncDiskPathForMedia($item));
-        }
+        // folder_name is denormalised on the media rows of this exact folder.
+        $this->mediaIn([$folder->id])->each(function (Media $item) use ($folder) {
+            $item->setCustomProperty('folder_name', $folder->name);
+            $item->save();
+        });
 
         return response()->json([
             'message' => 'Folder renamed.',
@@ -102,60 +95,172 @@ class FolderController extends Controller
     }
 
     /**
-     * Delete a folder and optionally keep its media at root (keep_media=true).
+     * Move a folder under another parent (null = root).
      *
-     * DELETE /media-manager/api/folders/{id}?keep_media=true
+     * POST /media-manager/api/folders/move  { id, parent_id }
+     */
+    public function move(Request $request, MediaStoragePathSynchronizer $pathSync): JsonResponse
+    {
+        $request->validate([
+            'id' => ['required', 'integer', 'exists:media_folders,id'],
+            'parent_id' => ['nullable', 'integer', 'exists:media_folders,id'],
+        ]);
+
+        $folder = Folder::findOrFail($request->id);
+        $parent = $request->parent_id ? Folder::findOrFail($request->parent_id) : null;
+
+        if ($parent && $parent->isSelfOrDescendantOf($folder)) {
+            throw ValidationException::withMessages(['parent_id' => 'A folder cannot be moved into itself or one of its subfolders.']);
+        }
+
+        $sibling = Folder::query()
+            ->where('parent_id', $parent?->id)
+            ->where('name', $folder->name)
+            ->where('id', '!=', $folder->id)
+            ->exists();
+
+        if ($sibling) {
+            throw ValidationException::withMessages(['parent_id' => 'A folder with this name already exists in the destination.']);
+        }
+
+        $oldRelative = $this->relative($folder);
+
+        $folder->parent_id = $parent?->id;
+        $folder->slug = $this->uniqueSlugIn($folder, $parent?->id);
+        $folder->save();
+        $folder->refresh();
+
+        $this->relocateTree($folder, $oldRelative, $pathSync);
+
+        return response()->json([
+            'message' => 'Folder moved.',
+            'data' => $this->folderData($folder),
+        ]);
+    }
+
+    /**
+     * Delete a folder with its subfolders.
+     *
+     * keep_media=1 moves the files to the root, otherwise they are deleted
+     * (refused with 409 if the usage resolver reports usages, unless force=1).
+     *
+     * DELETE /media-manager/api/folders/{id}?keep_media=1
      */
     public function destroy(int $id, Request $request, MediaStoragePathSynchronizer $pathSync): JsonResponse
     {
         $folder = Folder::findOrFail($id);
-        $keepMedia = filter_var($request->query('keep_media', false), FILTER_VALIDATE_BOOLEAN);
-        $folderIds = $folder->descendantAndSelfIds();
+        $keepMedia = $request->boolean('keep_media');
+        $media = $this->mediaIn($folder->descendantAndSelfIds());
 
-        $media = Media::query()
-            ->where('model_type', MediaManager::class)
-            ->whereIn('custom_properties->folder_id', $folderIds)
-            ->get();
-
-        if ($keepMedia) {
+        if (! $keepMedia && ! $request->boolean('force')) {
+            $blocked = [];
             foreach ($media as $item) {
-                $props = $item->custom_properties;
-                unset($props['folder_id'], $props['folder_name']);
-                $item->custom_properties = $props;
-                $item->save();
-                $pathSync->syncDiskPathForMedia($item);
-            }
-        } else {
-            foreach ($media as $item) {
-                $item->delete();
+                if ($usages = MediaUsage::for($item)) {
+                    $blocked[$item->id] = $usages;
+                }
             }
 
-            $disk = config('media-manager.disk', 'public');
-            $base = trim(config('media-manager.disk_path', 'media-manager'), '/');
-            $relative = $base.'/'.$folder->nestedSlugPath();
-
-            if (Storage::disk($disk)->exists($relative)) {
-                Storage::disk($disk)->deleteDirectory($relative);
+            if ($blocked !== []) {
+                return response()->json(['message' => 'Some media are in use.', 'usages' => $blocked], 409);
             }
         }
 
-        $folder->delete();
+        $relative = $this->relative($folder);
+
+        DB::transaction(function () use ($media, $keepMedia, $pathSync, $folder) {
+            foreach ($media as $item) {
+                if ($keepMedia) {
+                    $oldDir = $pathSync->expectedDirectory($item);
+                    $item->forgetCustomProperty('folder_id');
+                    $item->forgetCustomProperty('folder_name');
+                    $item->save();
+                    $pathSync->relocate($item, $oldDir);
+                } else {
+                    $item->delete();
+                }
+            }
+
+            $folder->delete(); // children cascade
+        });
+
+        $disk = Storage::disk($this->disk());
+        if ($disk->exists($relative)) {
+            $disk->deleteDirectory($relative);
+        }
 
         return response()->json(['message' => 'Folder deleted.']);
     }
 
-    /**
-     * Recursively build a folder tree for the sidebar.
-     */
-    private function buildTree($folders): array
-    {
-        return $folders->map(function (Folder $folder) {
-            $folder->loadMissing('children');
+    // ─── helpers ───────────────────────────────────────────────
 
-            return array_merge($this->folderData($folder), [
-                'children' => $this->buildTree($folder->children),
-            ]);
-        })->toArray();
+    /**
+     * Moves the folder's directory on disk after its slug/parent changed.
+     * Media files live below it, so their URLs keep resolving.
+     */
+    protected function relocateTree(Folder $folder, string $oldRelative, MediaStoragePathSynchronizer $pathSync): void
+    {
+        $newRelative = $this->relative($folder);
+        $disk = Storage::disk($this->disk());
+
+        if ($oldRelative === $newRelative) {
+            return;
+        }
+
+        if ($disk->exists($oldRelative)) {
+            $disk->makeDirectory(dirname($newRelative));
+            $disk->move($oldRelative, $newRelative);
+        } else {
+            $disk->makeDirectory($newRelative);
+        }
+
+        // Safety net for rows that were not on disk where the old layout said.
+        $this->mediaIn($folder->descendantAndSelfIds())
+            ->each(fn (Media $item) => $pathSync->syncDiskPathForMedia($item));
+    }
+
+    protected function mediaIn(array $folderIds): Collection|\Illuminate\Support\Collection
+    {
+        return Media::query()
+            ->where('model_type', MediaManager::class)
+            ->whereIn('custom_properties->folder_id', $folderIds)
+            ->get();
+    }
+
+    protected function uniqueSlugIn(Folder $folder, ?int $parentId): string
+    {
+        $base = Str::slug($folder->name) ?: 'folder';
+        $slug = $base;
+        $i = 1;
+
+        while (Folder::query()->where('parent_id', $parentId)->where('slug', $slug)->where('id', '!=', $folder->id)->exists()) {
+            $slug = "{$base}-{$i}";
+            $i++;
+        }
+
+        return $slug;
+    }
+
+    protected function disk(): string
+    {
+        return config('media-manager.disk', 'public');
+    }
+
+    protected function relative(Folder $folder): string
+    {
+        return trim(config('media-manager.disk_path', 'media-manager'), '/').'/'.$folder->nestedSlugPath();
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, \Illuminate\Support\Collection<int, Folder>>  $byParent
+     */
+    private function buildTree($byParent, int $parentId): array
+    {
+        return ($byParent->get($parentId) ?? collect())
+            ->map(fn (Folder $folder) => array_merge($this->folderData($folder), [
+                'children' => $this->buildTree($byParent, $folder->id),
+            ]))
+            ->values()
+            ->all();
     }
 
     private function folderData(Folder $folder): array

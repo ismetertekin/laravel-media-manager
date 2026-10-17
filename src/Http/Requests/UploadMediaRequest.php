@@ -13,26 +13,31 @@ class UploadMediaRequest extends FormRequest
 
     public function rules(): array
     {
-        $maxSize = config('media-manager.max_upload', 51200);
-        $allowedMimes = config('media-manager.allowed_types', [
-            'image/jpeg', 'image/png', 'image/gif', 'image/webp',
-            'video/mp4', 'video/webm', 'application/pdf', 'text/plain'
-        ]);
+        $maxSize = (int) config('media-manager.max_upload', 51200);
+        $allowed = (array) config('media-manager.allowed_types', []);
 
-        // Add common variations
-        if (in_array('image/png', $allowedMimes)) $allowedMimes[] = 'image/x-png';
-        
-        $mimeTypes = implode(',', $allowedMimes);
+        if (config('media-manager.allow_svg')) {
+            $allowed[] = 'image/svg+xml';
+        } else {
+            $allowed = array_values(array_diff($allowed, ['image/svg+xml']));
+        }
+
+        // Common variations
+        if (in_array('image/png', $allowed, true)) {
+            $allowed[] = 'image/x-png';
+        }
 
         return [
             'files' => ['required', 'array'],
             'files.*' => [
                 'file',
                 "max:{$maxSize}",
-                "mimetypes:{$mimeTypes}",
+                'mimetypes:'.implode(',', array_unique($allowed)),
             ],
-            'folder_id'   => ['nullable', 'integer', 'exists:media_folders,id'],
-            'collection'  => ['nullable', 'string', 'max:191'],
+            'folder_id' => ['nullable', 'integer', 'exists:media_folders,id'],
+            'collection' => ['nullable', 'string', 'max:191'],
+            'variants' => ['nullable'],
+            'crops' => ['nullable'],
         ];
     }
 
@@ -40,7 +45,7 @@ class UploadMediaRequest extends FormRequest
     {
         return [
             'files.*.mimetypes' => 'One or more files have an invalid type.',
-            'files.*.max'       => 'One or more files exceeds the size limit.',
+            'files.*.max' => 'One or more files exceeds the size limit.',
         ];
     }
 }

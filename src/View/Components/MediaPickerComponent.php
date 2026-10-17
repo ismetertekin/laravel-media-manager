@@ -4,6 +4,7 @@ namespace Yazilim360\MediaManager\View\Components;
 
 use Illuminate\View\Component;
 use Illuminate\View\View;
+use Yazilim360\MediaManager\Support\ClientConfig;
 
 /**
  * Blade component: <x-media-picker />
@@ -26,19 +27,17 @@ class MediaPickerComponent extends Component
         public ?bool $sidebar = null,
         public ?string $locale = null,
         public ?string $theme = null,
+        public array $variants = [],
+        public ?string $folder = null,
+        public ?bool $crop = null,
     ) {}
 
     public function render(): View
     {
         $locale = $this->locale ?? app()->getLocale();
-        $mmPickerTranslations = trans('media-manager::media-manager', [], $locale);
-
-        if (! is_array($mmPickerTranslations)) {
-            $mmPickerTranslations = [];
-        }
 
         return view('media-manager::components.media-picker', [
-            'mmPickerTranslations' => $mmPickerTranslations,
+            'mmPickerTranslations' => ClientConfig::translations($locale),
         ]);
     }
 }

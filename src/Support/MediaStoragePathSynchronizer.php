@@ -53,6 +53,34 @@ class MediaStoragePathSynchronizer
     }
 
     /**
+     * Medya klasörü değiştikten SONRA çağrılır; $oldDir değişiklikten ÖNCE
+     * {@see expectedDirectory()} ile alınan eski dizindir. Tüm ağaç (dönüşümler,
+     * varyantlar) yeni yola taşınır.
+     */
+    public function relocate(Media $media, string $oldDir): bool
+    {
+        if (! $this->isMediaManagerMedia($media)) {
+            return false;
+        }
+
+        $disk = $this->disk($media);
+        $newDir = rtrim($this->pathGenerator->getPath($media), '/');
+        $oldDir = rtrim($oldDir, '/');
+
+        if ($oldDir === $newDir || ! $disk->exists($oldDir)) {
+            return false;
+        }
+
+        $this->moveTree($disk, $oldDir, $newDir);
+
+        if ($disk->exists($oldDir)) {
+            $disk->deleteDirectory($oldDir);
+        }
+
+        return true;
+    }
+
+    /**
      * Dry-run / rapor için: dosya beklenen yerde değilse eski kök dizin (taşıma kaynağı).
      */
     public function findLegacyDirectory(Media $media): ?string

@@ -4,59 +4,69 @@
     Usage:
         <x-media-picker />
         <x-media-picker :multiple="true" :max="5" :sidebar="false" locale="tr" theme="dark" />
-        <x-media-picker locale="en" theme="{{ $activeTheme }}" />
+        <x-media-picker :variants='[["name"=>"card","width"=>256,"height"=>256],["name"=>"product","ratio"=>"3:4"]]' folder="themes/default/products" on-select="onPicked" />
 
     JS API:
         window.MediaManager.open({
             locale: 'tr' | 'en',
-            theme: 'light' | 'dark',
+            theme: 'auto' | 'light' | 'dark',
+            variants: [{ name, width, height } | { name, ratio, width? }],
             onSelect(files) { ... },
         });
 --}}
 
 @php
-$mmPickerTranslations = $mmPickerTranslations ?? [];
-if (! is_array($mmPickerTranslations)) {
-    $mmPickerTranslations = [];
-}
-$mmPickerConfig = config('media-manager');
-$distPath = public_path('vendor/media-manager/media-manager.js');
-$useDist = file_exists($distPath);
+    $mmConfig = \Yazilim360\MediaManager\Support\ClientConfig::toArray();
+    $mmCss = \Yazilim360\MediaManager\Support\ClientConfig::asset('media-manager.css');
+    $mmJs = \Yazilim360\MediaManager\Support\ClientConfig::asset('media-manager.js');
+    $mmOptions = array_filter([
+        'multiple' => $multiple,
+        'max' => $max,
+        'types' => json_decode($types, true) ?: null,
+        'sidebar' => $sidebar,
+        'locale' => $locale,
+        'theme' => $theme,
+        'variants' => $variants ?: null,
+        'folder' => $folder,
+        'crop' => $crop,
+    ], fn ($v) => $v !== null);
 @endphp
 
-@if($useDist)
-<link rel="stylesheet" href="{{ asset('vendor/media-manager/media-manager.css') }}">
-<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-<script src="{{ asset('vendor/media-manager/media-manager.js') }}" defer></script>
-@else
-@vite(['packages/yazilim360/media-manager/resources/js/media-manager.js'])
-@endif
+@once
+    @if($mmJs)
+        <link rel="stylesheet" href="{{ $mmCss }}">
+        <script src="{{ $mmJs }}" defer></script>
+    @else
+        @vite(['packages/yazilim360/media-manager/resources/js/media-manager.js'])
+    @endif
 
-<div
-    id="media-manager-root"
-    data-translations='@json($mmPickerTranslations)'
-    data-config='@json($mmPickerConfig)'
-></div>
+    <div
+        id="media-manager-root"
+        data-translations="{{ json_encode($mmPickerTranslations ?? [], JSON_UNESCAPED_UNICODE) }}"
+        data-config="{{ json_encode($mmConfig) }}"
+    ></div>
 
-<script>
-    window.mediaManagerLang = {!! json_encode($mmPickerTranslations, JSON_UNESCAPED_UNICODE) !!};
-</script>
+    <script>
+        document.addEventListener('click', function (e) {
+            var btn = e.target.closest('[data-mm-picker]');
+            if (!btn) return;
+            e.preventDefault();
+
+            var options = JSON.parse(btn.getAttribute('data-mm-options') || '{}');
+            var name = btn.getAttribute('data-mm-on-select');
+            if (name && typeof window[name] === 'function') options.onSelect = window[name];
+
+            window.MediaManager.open(options);
+        });
+    </script>
+@endonce
 
 <button
     type="button"
     class="{{ $buttonClass }}"
-    id="mm-trigger-{{ \Illuminate\Support\Str::random(6) }}"
-    onclick='
-        window.MediaManager.open({
-            multiple: {{ $multiple ? 'true' : 'false' }},
-            max: {{ $max }},
-            types: {!! $types !!},
-            onSelect: {{ $onSelect ?: 'null' }},
-            sidebar: @json($sidebar),
-            locale: @json($locale),
-            theme: @json($theme)
-        });
-    '
+    data-mm-picker
+    data-mm-options="{{ json_encode($mmOptions) }}"
+    @if($onSelect) data-mm-on-select="{{ $onSelect }}" @endif
 >
     {{ $buttonText }}
 </button>
