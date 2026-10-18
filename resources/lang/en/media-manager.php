@@ -136,5 +136,6 @@ return [
     'delete_confirm' => 'Are you sure you want to delete this?',
     'delete_folder_confirm' => 'Deleting a folder will remove its subfolders. Continue?',
     'variants_failed' => 'Uploaded, but the image sizes for ":name" could not be generated.',
+    'files_label' => 'Files',
     'files_count' => ':count files',
 ];

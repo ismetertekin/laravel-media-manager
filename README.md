@@ -78,6 +78,7 @@ MediaManager.open({
     folder: 'themes/default/products', // open (and create) this folder path
     selected: [12, 15],      // preselect media ids (keeps their order)
     select: true,            // false = library only, no "Select" button
+    rememberFolder: true,    // re-open in the folder the user last used (ignored when `folder` is given)
     container: '#host',      // embed in an element instead of a modal
     locale: 'tr',            // 'en' | 'tr' (or any locale you added)
     theme: 'auto',           // 'auto' (follow the host) | 'light' | 'dark'
@@ -290,6 +291,12 @@ php artisan media-manager:regenerate-variants [--specs=JSON] [--stored] [--folde
 php artisan media-manager:sync-storage-paths [--dry-run]   # repair disk paths that no longer match the folders
 php artisan media-library:regenerate                         # Spatie: rebuild thumb/medium/large conversions
 ```
+
+## Changelog
+
+**2.0.1** – primary buttons are always white on the purple (a zero-specificity reset no longer overrides component colours); lightbox follows light/dark; overlay buttons readable in light mode; equal-size detail actions with Save and Delete on one row; list rows share one height; the manager re-opens in the last folder (`rememberFolder: false` to disable); the details panel clears when you leave the folder and its preview works for files outside the current listing; the lightbox arrows stay in place at either end so rapid clicks never zoom.
+
+**2.0.0** – see the upgrade notes below.
 
 ## Upgrade notes
 

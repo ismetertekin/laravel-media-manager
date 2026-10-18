@@ -136,5 +136,6 @@ return [
     'delete_confirm' => 'Bunu silmek istediğinizden emin misiniz?',
     'delete_folder_confirm' => 'Klasörü silmek alt klasörlerini de kaldırır. Devam edilsin mi?',
     'variants_failed' => 'Yüklendi, ancak ":name" için görsel ölçüleri oluşturulamadı.',
+    'files_label' => 'Dosyalar',
     'files_count' => ':count dosya',
 ];
