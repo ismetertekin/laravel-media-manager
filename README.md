@@ -235,7 +235,7 @@ Override anything for another theme:
 | `max_variants`, `max_dimension`, `image_quality` | `12`, `8000`, `85` | Limits for the variant pipeline |
 | `queue`, `queue_connection` | `false`, `null` | Render variants on the queue |
 | `usage_resolver` | `null` | Class that reports where a media item is used (below) |
-| `video_thumb_second`, `ffmpeg_path`, `ffprobe_path` | `1`, `/usr/bin/…` | Video poster / metadata |
+| `video_thumb_second`, `video_poster_width`, `ffmpeg_path`, `ffprobe_path` | `1`, `640`, `/usr/bin/…` | Video poster frame / size, binaries (auto-detected when wrong) |
 | `default_theme`, `default_view`, `sidebar`, `per_page`, `allowed_locales` | `auto`, `grid`, `false`, `30`, `en,tr` | UI defaults |
 
 PHP limits must exceed `max_upload`: `upload_max_filesize` and `post_max_size`.
@@ -273,8 +273,9 @@ All under `/{route_prefix}/api` (JSON, same middleware as the page):
 |---|---|
 | `GET /files` | `folder_id`, `recursive=1`, `search`, `type=image,video`, `sort=created_at\|name\|size`, `dir`, `page`, `ids[]` |
 | `GET /files/{id}` · `PATCH /files/{id}` | Read · update `name`, `alt`, `title`, `description` |
-| `POST /upload` | `files[]`, `folder_id`, `variants` (JSON), `crops` (JSON) → `{data, duplicates}` |
+| `POST /upload` | `files[]`, `folder_id`, `variants` (JSON), `crops` (JSON) → `{data, duplicates, warnings}` |
 | `POST /files/{id}/variants` | `variants?`, `crops?` – (re)generate variants |
+| `POST /files/{id}/poster` | `poster` (image), `second?`, `duration?`, `width?`, `height?` – set a video's thumbnail |
 | `DELETE /files/{id}` · `POST /files/delete` | Delete one · `ids[]` (`force=1` overrides the usage check) |
 | `POST /files/move` · `POST /files/copy` | `ids[]`, `folder_id` (null = root) |
 | `GET /folders` · `POST /folders` | Tree · `name`, `parent_id` |
@@ -290,9 +291,53 @@ Only media owned by the manager is ever listed or modified, so the package can s
 php artisan media-manager:regenerate-variants [--specs=JSON] [--stored] [--folder=path] [--ids=1 --ids=2]
 php artisan media-manager:sync-storage-paths [--dry-run]   # repair disk paths that no longer match the folders
 php artisan media-library:regenerate                         # Spatie: rebuild thumb/medium/large conversions
+php artisan media-manager:doctor                             # environment check with fix hints
+php artisan media-manager:video-posters [--force] [--second=2.3]
+```
+
+## Video thumbnails (no ffmpeg required)
+
+On upload every video gets a thumbnail frame — YouTube style — shown in the grid, the details panel and as the player's
+poster. It is returned in the result as `thumb_url` / `poster_url` (and `conversions.thumb`), next to `width`, `height`
+and `duration`. It is created in this order:
+
+1. **On the server with ffmpeg**, when ffmpeg is available (best for huge files and non-browser formats).
+2. **In the uploader's browser** otherwise: the browser decodes the video it is uploading, grabs the frame, and sends the
+   JPEG (plus duration and size) to `POST /files/{id}/poster`. No ffmpeg, no extra PHP extension — nothing to install on a
+   Mac, a Windows laptop or a shared host. Works for what the browser can play (MP4/H.264, WebM, most MOV); a codec the
+   browser cannot decode (e.g. HEVC in Chrome) simply stays without a thumbnail.
+
+Either way an upload never fails because of the thumbnail. Extras for the browser path: open a video in the viewer and press
+the camera button to **use the current frame as the thumbnail**, or press **Create thumbnail** in the details panel for videos
+that have none.
+
+```env
+MEDIA_MANAGER_VIDEO_THUMB_SECOND=2.3   # frame to grab (decimals ok); kept inside short clips
+MEDIA_MANAGER_CLIENT_POSTER=true       # false = server (ffmpeg) only
+# optional, only to let the server make them:
+FFMPEG_PATH="C:\ffmpeg\bin\ffmpeg.exe"   # quotes on Windows; auto-detected on the PATH
+FFPROBE_PATH="C:\ffmpeg\bin\ffprobe.exe"
+```
+
+For files on a remote disk (S3) the browser can only read the frame of a *just uploaded* file or of a URL served with CORS
+headers; otherwise use ffmpeg on the server. After changing `.env` run `php artisan config:clear`. Check the setup with:
+
+```bash
+php artisan media-manager:doctor                       # PHP extensions, upload limits, storage, ffmpeg, route protection
+php artisan media-manager:video-posters                # server-side posters for videos that have none (needs ffmpeg)
+php artisan media-manager:video-posters --force --second=2.3
 ```
 
 ## Changelog
+
+**2.0.3** – video thumbnails no longer need ffmpeg: when the server cannot create one the uploader's browser grabs the frame and sends it (`POST /files/{id}/poster`, also reports duration and size); "use this frame as thumbnail" in the viewer and "Create thumbnail" in the details panel; `client_poster` setting; poster URLs carry a cache-buster.
+
+**2.0.2** – video uploads: a misconfigured ffmpeg made Spatie's video conversion throw *after* the file was stored, so the
+UI showed an error and every retry created another copy. Posters are now made by a direct, failure-proof ffmpeg call
+(`thumb_url`, `poster_url`); ffmpeg/ffprobe are found next to each other and on the PATH; any error after a file has been
+stored becomes a warning instead of a 500; the list refreshes after a failed upload; the browser is told the real upload
+limit (`min(max_upload, upload_max_filesize, post_max_size)`); new `media-manager:doctor` and `media-manager:video-posters`
+commands; `warnings` in the upload response.
 
 **2.0.1** – primary buttons are always white on the purple (a zero-specificity reset no longer overrides component colours); lightbox follows light/dark; overlay buttons readable in light mode; equal-size detail actions with Save and Delete on one row; list rows share one height; the manager re-opens in the last folder (`rememberFolder: false` to disable); the details panel clears when you leave the folder and its preview works for files outside the current listing; the lightbox arrows stay in place at either end so rapid clicks never zoom.
 

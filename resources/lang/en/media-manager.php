@@ -135,7 +135,12 @@ return [
     'upload_files' => 'Upload Files',
     'delete_confirm' => 'Are you sure you want to delete this?',
     'delete_folder_confirm' => 'Deleting a folder will remove its subfolders. Continue?',
+    'poster_updated' => 'Thumbnail updated.',
+    'poster_failed' => 'The thumbnail could not be created. The browser cannot read this video.',
+    'use_frame' => 'Use this frame as thumbnail',
+    'create_thumbnail' => 'Create thumbnail',
+    'upload_warning' => '":name" was uploaded, but some previews could not be generated.',
     'variants_failed' => 'Uploaded, but the image sizes for ":name" could not be generated.',
     'files_label' => 'Files',
-    'files_count' => ':count files',
+    'files_count' => ':count file(s)',
 ];

@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Yazilim360\MediaManager\Support\ImageEditor;
 use Yazilim360\MediaManager\Support\VariantGenerator;
+use Yazilim360\MediaManager\Support\VideoPoster;
 
 /**
  * Transforms a Spatie Media model into a consistent JSON structure
@@ -44,8 +45,15 @@ class MediaResource extends JsonResource
             }
         }
 
-        $thumbUrl = $conversions['thumb'] ?? ($type === 'image' ? $this->getUrl() : null);
         $props = (array) $this->custom_properties;
+
+        // Videos: the frame grabbed at upload (YouTube style) is the thumbnail everywhere.
+        $posterUrl = $type === 'video' ? app(VideoPoster::class)->url($this->resource) : null;
+        if ($posterUrl) {
+            $conversions['thumb'] = $posterUrl;
+        }
+
+        $thumbUrl = $conversions['thumb'] ?? ($type === 'image' ? $this->getUrl() : null);
 
         return [
             'id' => $this->id,
@@ -78,6 +86,8 @@ class MediaResource extends JsonResource
             'variants_status' => $props['variants_status'] ?? null,
             'crops' => $props['crops'] ?? (object) [],
             'variant_specs' => $props['variant_specs'] ?? [],
+            'poster_url' => $posterUrl,
+            'poster_status' => $props['poster_status'] ?? null,
             'editable' => in_array($mime, ImageEditor::MIMES, true),
         ];
     }

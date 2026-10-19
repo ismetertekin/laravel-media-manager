@@ -51,20 +51,8 @@ class MediaManager extends Model implements HasMedia
                 ->nonQueued();
         }
 
-        [$thumbWidth, $thumbHeight] = $conversions['thumb'] ?? [300, 300];
-        $videoThumbSecond = (float) config('media-manager.video_thumb_second', 1);
-        $duration = (float) ($media?->getCustomProperty('duration') ?? 0);
-        if ($duration > 0) {
-            // Never ask for a frame past the end of short clips.
-            $videoThumbSecond = min($videoThumbSecond, round($duration / 2, 2));
-        }
-
-        $this->addMediaConversion('thumb')
-            ->width($thumbWidth)
-            ->height($thumbHeight)
-            ->extractVideoFrameAtSecond($videoThumbSecond)
-            ->performOnCollections('videos')
-            ->nonQueued();
+        // Video posters are made by Support\VideoPoster (plain ffmpeg call): a missing or misconfigured
+        // ffmpeg must never make an upload fail, which Spatie's video conversion would.
 
         if (config('media-manager.webp', true)) {
             $this->addMediaConversion('webp')

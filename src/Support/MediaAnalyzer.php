@@ -44,6 +44,11 @@ class MediaAnalyzer
 
     protected function analyzeVideo(Media $media): void
     {
+        // Already probed while uploading.
+        if ($media->getCustomProperty('width') && $media->getCustomProperty('duration') !== null) {
+            return;
+        }
+
         $this->withLocalCopy($media, function (string $path) use ($media) {
             foreach ($this->videoInfo($path) as $key => $value) {
                 $media->setCustomProperty($key, $value);
@@ -61,8 +66,8 @@ class MediaAnalyzer
      */
     public function videoInfo(string $path): array
     {
-        $ffprobe = config('media-manager.ffprobe_path');
-        if (! $ffprobe || ! is_file($ffprobe)) {
+        $ffprobe = Binaries::ffprobe();
+        if (! $ffprobe) {
             return [];
         }
 

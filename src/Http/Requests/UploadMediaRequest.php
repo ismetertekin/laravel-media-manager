@@ -45,6 +45,7 @@ class UploadMediaRequest extends FormRequest
     {
         return [
             'files.*.mimetypes' => 'One or more files have an invalid type.',
+            'files.*.uploaded' => 'The file could not be uploaded. The PHP limits (upload_max_filesize / post_max_size) may be lower than the configured maximum.',
             'files.*.max' => 'One or more files exceeds the size limit.',
         ];
     }

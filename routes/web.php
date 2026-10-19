@@ -27,6 +27,7 @@ Route::middleware($middleware)
             Route::get('/files/{id}', [MediaController::class, 'show'])->whereNumber('id')->name('media-manager.api.files.show');
             Route::patch('/files/{id}', [MediaController::class, 'update'])->whereNumber('id')->name('media-manager.api.files.update');
             Route::delete('/files/{id}', [MediaController::class, 'destroy'])->whereNumber('id')->name('media-manager.api.files.destroy');
+            Route::post('/files/{id}/poster', [MediaController::class, 'poster'])->whereNumber('id')->name('media-manager.api.files.poster');
             Route::post('/files/{id}/variants', [MediaController::class, 'variants'])->whereNumber('id')->name('media-manager.api.files.variants');
 
             // File operations

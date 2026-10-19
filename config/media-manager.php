@@ -152,7 +152,13 @@ return [
     |   FFMPEG_PATH=C:\ffmpeg\bin\ffmpeg.exe
     |   FFPROBE_PATH=C:\ffmpeg\bin\ffprobe.exe
     */
+    // Poster (thumbnail) frame: the second of the clip to grab (decimals allowed, e.g. 2.3). Kept inside short clips.
     'video_thumb_second' => env('MEDIA_MANAGER_VIDEO_THUMB_SECOND', 1),
+    // Video thumbnails need no ffmpeg: when the server has none (or it fails) the uploader's browser grabs the frame
+    // and sends it. Set to false to create them on the server only.
+    'client_poster' => env('MEDIA_MANAGER_CLIENT_POSTER', true),
+    'video_poster_width' => env('MEDIA_MANAGER_POSTER_WIDTH', 640),
+    'poster_timeout' => env('MEDIA_MANAGER_POSTER_TIMEOUT', 60),
     'ffmpeg_path' => env('FFMPEG_PATH', '/usr/bin/ffmpeg'),
     'ffprobe_path' => env('FFPROBE_PATH', '/usr/bin/ffprobe'),
     'ffmpeg_timeout' => env('FFMPEG_TIMEOUT', 900),

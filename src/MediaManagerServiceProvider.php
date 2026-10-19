@@ -4,8 +4,10 @@ namespace Yazilim360\MediaManager;
 
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\ServiceProvider;
+use Yazilim360\MediaManager\Console\DoctorCommand;
 use Yazilim360\MediaManager\Console\RegenerateVariantsCommand;
 use Yazilim360\MediaManager\Console\SyncMediaStoragePathsCommand;
+use Yazilim360\MediaManager\Console\VideoPostersCommand;
 use Yazilim360\MediaManager\Models\MediaManager;
 use Yazilim360\MediaManager\Support\ImageEditor;
 use Yazilim360\MediaManager\Support\PathGenerator;
@@ -49,6 +51,8 @@ class MediaManagerServiceProvider extends ServiceProvider
             $this->commands([
                 SyncMediaStoragePathsCommand::class,
                 RegenerateVariantsCommand::class,
+                DoctorCommand::class,
+                VideoPostersCommand::class,
             ]);
 
             // Publish config

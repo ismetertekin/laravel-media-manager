@@ -22,6 +22,7 @@ use Yazilim360\MediaManager\Support\MediaUsage;
 use Yazilim360\MediaManager\Support\SvgGuard;
 use Yazilim360\MediaManager\Support\VariantGenerator;
 use Yazilim360\MediaManager\Support\VariantSpec;
+use Yazilim360\MediaManager\Support\VideoPoster;
 
 class MediaController extends Controller
 {
@@ -88,7 +89,7 @@ class MediaController extends Controller
      *
      * Optional: variants (JSON), crops (JSON) – see README.
      */
-    public function upload(UploadMediaRequest $request, MediaAnalyzer $analyzer, VariantGenerator $variants): JsonResponse
+    public function upload(UploadMediaRequest $request, MediaAnalyzer $analyzer, VariantGenerator $variants, VideoPoster $posters): JsonResponse
     {
         $specs = VariantSpec::parseMany($request->input('variants'));
         $crops = $this->decodeCrops($request->input('crops'));
@@ -101,6 +102,7 @@ class MediaController extends Controller
 
         $uploaded = [];
         $duplicates = [];
+        $warnings = [];
 
         try {
             foreach ($request->file('files') as $file) {
@@ -137,11 +139,29 @@ class MediaController extends Controller
                     $props['folder_name'] = $folder->name;
                 }
 
-                $media = $owner->addMedia($file)
-                    ->withCustomProperties($props)
-                    ->toMediaCollection($this->collectionFor($mime, (string) $request->input('collection', config('media-manager.collection', 'default'))), $disk);
+                $storedAt = now()->subSeconds(2);
+
+                try {
+                    $media = $owner->addMedia($file)
+                        ->withCustomProperties($props)
+                        ->toMediaCollection($this->collectionFor($mime, (string) $request->input('collection', config('media-manager.collection', 'default'))), $disk);
+                } catch (\Throwable $e) {
+                    // Spatie stores the file and its row first and renders conversions afterwards. When only
+                    // that last step failed the upload itself is fine: keep it, report a warning, never a 500.
+                    $media = $this->scope()->where('custom_properties->hash', $hash)->where('created_at', '>=', $storedAt)->latest('id')->first();
+                    if (! $media) {
+                        throw $e;
+                    }
+
+                    report($e);
+                    $warnings[] = ['file' => $file->getClientOriginalName(), 'code' => 'processing_failed'];
+                }
 
                 $analyzer->analyze($media);
+
+                if (str_starts_with($mime, 'video/')) {
+                    $posters->generate($media);
+                }
 
                 if ($specs !== [] && ImageEditor::supports($mime)) {
                     // The upload itself succeeded; a failing variant render must not turn it into an error.
@@ -162,13 +182,16 @@ class MediaController extends Controller
         } catch (\Throwable $e) {
             Log::error('[MediaManager] Upload failed', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
 
-            return response()->json(['message' => 'Upload failed.'], 500);
+            return response()->json([
+                'message' => app()->hasDebugModeEnabled() ? 'Upload failed: '.$e->getMessage() : 'Upload failed.',
+            ], 500);
         }
 
         return response()->json([
             'message' => 'Uploaded successfully',
             'data' => $uploaded,
             'duplicates' => $duplicates,
+            'warnings' => $warnings,
         ], 201);
     }
 
@@ -238,6 +261,51 @@ class MediaController extends Controller
 
             return response()->json(['message' => 'Could not generate image variants.'], 500);
         }
+
+        return new MediaResource($media->fresh());
+    }
+
+    /**
+     * Set a video's poster (thumbnail) from an image, e.g. a frame the browser grabbed from the video itself.
+     * This is what makes ffmpeg optional on the server.
+     *
+     * POST /media-manager/api/files/{id}/poster   poster (image), second?, duration?, width?, height?
+     */
+    public function poster(Request $request, int $id, VideoPoster $posters): MediaResource
+    {
+        $request->validate([
+            'poster' => ['required', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
+            'second' => ['nullable', 'numeric', 'min:0', 'max:86400'],
+            'duration' => ['nullable', 'numeric', 'min:0', 'max:86400'],
+            'width' => ['nullable', 'integer', 'min:1', 'max:16000'],
+            'height' => ['nullable', 'integer', 'min:1', 'max:16000'],
+        ]);
+
+        $media = $this->scope()->findOrFail($id);
+
+        if (! str_starts_with((string) $media->mime_type, 'video/')) {
+            throw ValidationException::withMessages(['poster' => 'Posters can only be set on videos.']);
+        }
+
+        try {
+            $ok = $posters->storeFile($media, $request->file('poster')->getRealPath(), $request->filled('second') ? (float) $request->second : null, 'browser');
+        } catch (\Throwable $e) {
+            report($e);
+            $ok = false;
+        }
+
+        if (! $ok) {
+            throw ValidationException::withMessages(['poster' => 'The image could not be processed.']);
+        }
+
+        // Without ffprobe the browser is the only source of the clip's duration and size.
+        $media->refresh();
+        foreach (['duration', 'width', 'height'] as $key) {
+            if ($request->filled($key) && ! $media->getCustomProperty($key)) {
+                $media->setCustomProperty($key, $key === 'duration' ? round((float) $request->$key, 2) : (int) $request->$key);
+            }
+        }
+        $media->save();
 
         return new MediaResource($media->fresh());
     }
