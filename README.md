@@ -131,6 +131,29 @@ MediaManager.open({
   (default 8000 px on a side) are stored but not processed (`variants_status: failed`) to protect PHP's memory.
 - `queue => true` (`MEDIA_MANAGER_QUEUE=true`) renders variants in a queued job (`variants_status: pending → ready`).
 
+#### Crop on select (2.0.5)
+
+Pass `cropOnSelect` to make sure the picked images really have the sizes the field needs — also for images that
+were uploaded long ago (or for another theme):
+
+```js
+MediaManager.open({
+    types: ['image'],
+    variants: [{ name: 'vb-1920x800', width: 1920, height: 800 }],
+    cropOnSelect: true,          // true / 'missing': only images without these variants | 'always': every image
+    onSelect(files) {
+        files[0].variants['vb-1920x800'].url   // cropped 1920×800 copy, the original is untouched
+    },
+})
+```
+
+- After **Select**, every image that does not have the requested variants yet goes through the crop editor
+  (one step per ratio). **Skip (auto crop)** still generates the variants with a centred crop.
+- `onSelect` receives the fresh media objects, so `variants.*.url` is always filled.
+- The footer shows the recommended size and images smaller than it get a **Small** badge.
+- Variant names: 1–32 characters, letters, digits, `-` or `_`. Naming them by size (`vb-1920x800`) lets every
+  field and theme that needs the same size share one file.
+
 Regenerate variants for existing images, for example after switching theme:
 
 ```bash
@@ -329,6 +352,8 @@ php artisan media-manager:video-posters --force --second=2.3
 ```
 
 ## Changelog
+
+**2.0.5** – crop on select: `open({ variants, cropOnSelect: true })` sends picked images without the requested sizes through the crop editor (Skip still generates a centred crop) and `onSelect` returns them with `variants.*.url` filled; recommended size in the footer and a **Small** badge on images below it.
 
 **2.0.3** – video thumbnails no longer need ffmpeg: when the server cannot create one the uploader's browser grabs the frame and sends it (`POST /files/{id}/poster`, also reports duration and size); "use this frame as thumbnail" in the viewer and "Create thumbnail" in the details panel; `client_poster` setting; poster URLs carry a cache-buster.
 
